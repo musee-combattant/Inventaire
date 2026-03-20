@@ -1,10 +1,17 @@
 export const APP_VERSION = {
-  version: "1.0.1",
+  version: "1.0.2",
   date: "20/03/2026",
   author: "Parkaf",
   changelog: [
     {
-      version: "1.0.1",
+      version: "1.0.0",
+      date: "20/03/2026",
+      changes: [
+            "Vérouillage des fiches pour éviter les conflits de modifications",
+      ],
+    },
+    {
+      version: "0.9.0",
       date: "20/03/2026",
       changes: [
         "Correction de bugs mineurs",
@@ -13,7 +20,7 @@ export const APP_VERSION = {
       ],
     },
     {
-      version: "1.0.0",
+      version: "0.8.0",
       date: "20/03/2026",
       changes: [
         "Première version publique",
