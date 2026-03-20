@@ -336,6 +336,126 @@ function HistoryPanel({ history, darkMode }) {
   );
 }
 
+function GlobalHistoryModal({ history, darkMode, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+      <div
+        className={cn(
+          "flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border shadow-2xl",
+          darkMode
+            ? "border-slate-800 bg-slate-900 text-slate-100"
+            : "border-slate-200 bg-white text-slate-900"
+        )}
+      >
+        <div
+          className={cn(
+            "flex items-center justify-between border-b px-5 py-4",
+            darkMode
+              ? "border-slate-800 bg-slate-900"
+              : "border-slate-200 bg-white"
+          )}
+        >
+          <div>
+            <h2 className="text-lg font-bold">Journal des modifications</h2>
+            <p
+              className={cn(
+                "text-sm",
+                darkMode ? "text-slate-400" : "text-slate-500"
+              )}
+            >
+              Historique global des actions sur les fiches
+            </p>
+          </div>
+
+          <button
+            onClick={onClose}
+            className={cn(
+              "rounded-2xl p-2 transition",
+              darkMode
+                ? "text-slate-400 hover:bg-slate-800"
+                : "text-slate-500 hover:bg-slate-100"
+            )}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          {history.length === 0 ? (
+            <p
+              className={cn(
+                "text-sm",
+                darkMode ? "text-slate-400" : "text-slate-500"
+              )}
+            >
+              Aucun historique disponible.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {history.map((entry) => {
+                const changes = getChangedFields(entry.old_data, entry.new_data);
+                const objectName =
+                  entry.new_data?.name ||
+                  entry.old_data?.name ||
+                  "Objet inconnu";
+
+                return (
+                  <div
+                    key={entry.id}
+                    className={cn(
+                      "rounded-2xl border p-4",
+                      darkMode
+                        ? "border-slate-800 bg-slate-950"
+                        : "border-slate-200 bg-slate-50"
+                    )}
+                  >
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-sm font-semibold">
+                        {entry.changed_by_name || "Utilisateur inconnu"}{" "}
+                        {actionLabel(entry.action)} —{" "}
+                        <span className="font-bold">{objectName}</span>
+                      </p>
+
+                      <p
+                        className={cn(
+                          "text-xs",
+                          darkMode ? "text-slate-400" : "text-slate-500"
+                        )}
+                      >
+                        {new Date(entry.changed_at).toLocaleString("fr-FR")}
+                      </p>
+                    </div>
+
+                    {entry.action === "update" && changes.length > 0 && (
+                      <ul className="mt-3 space-y-2 text-xs">
+                        {changes.map((change) => (
+                          <li key={change.field} className="leading-5">
+                            <span className="font-semibold">{change.field}</span> :{" "}
+                            {formatHistoryValue(change.before)} →{" "}
+                            {formatHistoryValue(change.after)}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {entry.action === "create" && (
+                      <p className="mt-3 text-xs">Création de la fiche.</p>
+                    )}
+
+                    {entry.action === "delete" && (
+                      <p className="mt-3 text-xs">Suppression de la fiche.</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -346,6 +466,8 @@ function App() {
   const [info, setInfo] = useState("");
   const [showChangelog, setShowChangelog] = useState(false);
   const [objectHistory, setObjectHistory] = useState([]);
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [globalHistory, setGlobalHistory] = useState([]);
 
   const [search, setSearch] = useState("");
   const [roomFilter, setRoomFilter] = useState("all");
@@ -375,13 +497,15 @@ function App() {
   }, [darkMode]);
 
   useEffect(() => {
-    const hasModalOpen = settingsOpen || !!formMode || showChangelog;
+    const hasModalOpen =
+      settingsOpen || !!formMode || showChangelog || historyModalOpen;
+
     document.body.style.overflow = hasModalOpen ? "hidden" : "";
 
     return () => {
       document.body.style.overflow = "";
     };
-  }, [settingsOpen, formMode, showChangelog]);
+  }, [settingsOpen, formMode, showChangelog, historyModalOpen]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -425,6 +549,14 @@ function App() {
     });
   }, [selectedObject]);
 
+  useEffect(() => {
+    if (!historyModalOpen) return;
+
+    loadGlobalHistory().catch((e) => {
+      console.error("Erreur chargement journal global :", e);
+    });
+  }, [historyModalOpen]);
+
   async function bootstrap() {
     try {
       setLoading(true);
@@ -435,6 +567,17 @@ function App() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function loadGlobalHistory() {
+    const { data, error } = await supabase
+      .from("museum_object_history")
+      .select("*")
+      .order("changed_at", { ascending: false })
+      .limit(100);
+
+    if (error) throw error;
+    setGlobalHistory(data || []);
   }
 
   async function loadObjectHistory(objectId) {
@@ -490,6 +633,7 @@ function App() {
   const canEdit = isAdmin || isSuperAdmin;
   const canDelete = isSuperAdmin;
   const canManageSettings = isSuperAdmin;
+  const canViewHistory = canEdit || canDelete || canManageSettings;
 
   const filteredObjects = useMemo(() => {
     let list = [...objects];
@@ -617,6 +761,8 @@ function App() {
         onToggleDarkMode={() => setDarkMode((prev) => !prev)}
         canManageSettings={canManageSettings}
         onOpenSettings={() => setSettingsOpen(true)}
+        canViewHistory={canViewHistory}
+        onOpenHistory={() => setHistoryModalOpen(true)}
       />
 
       <main className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
@@ -890,6 +1036,14 @@ function App() {
           onClose={() => setShowChangelog(false)}
         />
       )}
+
+      {historyModalOpen && (
+        <GlobalHistoryModal
+          history={globalHistory}
+          darkMode={darkMode}
+          onClose={() => setHistoryModalOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -1043,6 +1197,8 @@ function TopBar({
   onToggleDarkMode,
   canManageSettings,
   onOpenSettings,
+  onOpenHistory,
+  canViewHistory,
 }) {
   return (
     <header
@@ -1087,6 +1243,20 @@ function TopBar({
               )}
             >
               ⚙️ Réglages
+            </button>
+          )}
+
+          {canViewHistory && (
+            <button
+              onClick={onOpenHistory}
+              className={cn(
+                "rounded-2xl border px-3 py-2 text-sm font-medium transition",
+                darkMode
+                  ? "border-slate-700 bg-slate-800 text-slate-100 hover:bg-slate-700"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              )}
+            >
+              🕘 Journal
             </button>
           )}
 
@@ -1151,9 +1321,18 @@ function ObjectCard({
       )}
     >
       <button onClick={onOpen} className="block w-full text-left">
-        <div className={cn("aspect-square", darkMode ? "bg-slate-800" : "bg-slate-100")}>
+        <div
+          className={cn(
+            "aspect-square",
+            darkMode ? "bg-slate-800" : "bg-slate-100"
+          )}
+        >
           {imageUrl ? (
-            <img src={imageUrl} alt={item.name} className="h-full w-full object-cover" />
+            <img
+              src={imageUrl}
+              alt={item.name}
+              className="h-full w-full object-cover"
+            />
           ) : (
             <div className="flex h-full items-center justify-center text-slate-400">
               <ImageIcon size={40} />
@@ -1161,7 +1340,12 @@ function ObjectCard({
           )}
         </div>
 
-        <div className={cn("space-y-3 p-4", darkMode ? "text-slate-100" : "text-slate-900")}>
+        <div
+          className={cn(
+            "space-y-3 p-4",
+            darkMode ? "text-slate-100" : "text-slate-900"
+          )}
+        >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h3
@@ -1188,10 +1372,17 @@ function ObjectCard({
             )}
           </div>
 
-          <div className={cn("space-y-2 text-sm", darkMode ? "text-slate-300" : "text-slate-600")}>
+          <div
+            className={cn(
+              "space-y-2 text-sm",
+              darkMode ? "text-slate-300" : "text-slate-600"
+            )}
+          >
             <div className="flex items-center gap-2">
               <MapPin size={15} className="text-slate-400" />
-              <span className="truncate">{item.room || DEFAULT_ROOM_LABEL}</span>
+              <span className="truncate">
+                {item.room || DEFAULT_ROOM_LABEL}
+              </span>
             </div>
             <div
               className={cn(
@@ -1210,7 +1401,9 @@ function ObjectCard({
                   key={tag}
                   className={cn(
                     "rounded-full px-2.5 py-1 text-xs font-medium",
-                    darkMode ? "bg-slate-800 text-slate-200" : "bg-slate-100 text-slate-700"
+                    darkMode
+                      ? "bg-slate-800 text-slate-200"
+                      : "bg-slate-100 text-slate-700"
                   )}
                 >
                   #{tag}
@@ -1222,13 +1415,20 @@ function ObjectCard({
       </button>
 
       {(canEdit || canDelete) && (
-        <div className={cn("flex gap-2 border-t px-4 py-3", darkMode ? "border-slate-800" : "border-slate-100")}>
+        <div
+          className={cn(
+            "flex gap-2 border-t px-4 py-3",
+            darkMode ? "border-slate-800" : "border-slate-100"
+          )}
+        >
           {canEdit && (
             <button
               onClick={onEdit}
               className={cn(
                 "inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border px-3 py-2 text-sm font-medium transition",
-                darkMode ? "border-slate-700 text-slate-100 hover:bg-slate-800" : "border-slate-200 text-slate-700 hover:bg-slate-50"
+                darkMode
+                  ? "border-slate-700 text-slate-100 hover:bg-slate-800"
+                  : "border-slate-200 text-slate-700 hover:bg-slate-50"
               )}
             >
               <Pencil size={16} />
@@ -1276,10 +1476,20 @@ function DetailsPanel({
         >
           <Search size={24} />
         </div>
-        <h3 className={cn("mt-4 text-lg font-semibold", darkMode ? "text-slate-100" : "text-slate-900")}>
+        <h3
+          className={cn(
+            "mt-4 text-lg font-semibold",
+            darkMode ? "text-slate-100" : "text-slate-900"
+          )}
+        >
           Aucune fiche sélectionnée
         </h3>
-        <p className={cn("mt-2 text-sm leading-6", darkMode ? "text-slate-400" : "text-slate-500")}>
+        <p
+          className={cn(
+            "mt-2 text-sm leading-6",
+            darkMode ? "text-slate-400" : "text-slate-500"
+          )}
+        >
           Clique sur une carte pour afficher la fiche détaillée de l’objet.
         </p>
       </div>
@@ -1298,21 +1508,43 @@ function DetailsPanel({
         darkMode ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"
       )}
     >
-      <div className={cn("flex items-center justify-between border-b px-5 py-4", darkMode ? "border-slate-800" : "border-slate-100")}>
+      <div
+        className={cn(
+          "flex items-center justify-between border-b px-5 py-4",
+          darkMode ? "border-slate-800" : "border-slate-100"
+        )}
+      >
         <div>
           <h2 className="text-lg font-bold">Fiche objet</h2>
-          <p className={cn("text-xs", darkMode ? "text-slate-400" : "text-slate-500")}>
+          <p
+            className={cn(
+              "text-xs",
+              darkMode ? "text-slate-400" : "text-slate-500"
+            )}
+          >
             Consultation détaillée
           </p>
         </div>
-        <button onClick={onClose} className="rounded-2xl p-2 text-slate-500 transition hover:bg-slate-100">
+        <button
+          onClick={onClose}
+          className="rounded-2xl p-2 text-slate-500 transition hover:bg-slate-100"
+        >
           <X size={18} />
         </button>
       </div>
 
-      <div className={cn("aspect-square", darkMode ? "bg-slate-800" : "bg-slate-100")}>
+      <div
+        className={cn(
+          "aspect-square",
+          darkMode ? "bg-slate-800" : "bg-slate-100"
+        )}
+      >
         {imageUrl ? (
-          <img src={imageUrl} alt={item.name} className="h-full w-full object-cover" />
+          <img
+            src={imageUrl}
+            alt={item.name}
+            className="h-full w-full object-cover"
+          />
         ) : (
           <div className="flex h-full items-center justify-center text-slate-400">
             <ImageIcon size={40} />
@@ -1320,7 +1552,12 @@ function DetailsPanel({
         )}
       </div>
 
-      <div className={cn("space-y-5 p-5", darkMode ? "text-slate-100" : "text-slate-900")}>
+      <div
+        className={cn(
+          "space-y-5 p-5",
+          darkMode ? "text-slate-100" : "text-slate-900"
+        )}
+      >
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-xl font-bold leading-tight">{item.name}</h3>
@@ -1330,7 +1567,12 @@ function DetailsPanel({
               </span>
             )}
           </div>
-          <p className={cn("mt-1 text-sm", darkMode ? "text-slate-400" : "text-slate-500")}>
+          <p
+            className={cn(
+              "mt-1 text-sm",
+              darkMode ? "text-slate-400" : "text-slate-500"
+            )}
+          >
             Réf. {item.reference || "Non renseignée"}
           </p>
         </div>
@@ -1345,15 +1587,29 @@ function DetailsPanel({
         <InfoRow
           icon={<Hash size={16} />}
           label="Mots-clés"
-          value={(item.tags || []).length ? item.tags.map((t) => `#${t}`).join(" ") : "Aucun"}
+          value={
+            (item.tags || []).length
+              ? item.tags.map((t) => `#${t}`).join(" ")
+              : "Aucun"
+          }
           darkMode={darkMode}
         />
 
         <div>
-          <p className={cn("mb-2 text-xs font-semibold uppercase tracking-wide", darkMode ? "text-slate-400" : "text-slate-500")}>
+          <p
+            className={cn(
+              "mb-2 text-xs font-semibold uppercase tracking-wide",
+              darkMode ? "text-slate-400" : "text-slate-500"
+            )}
+          >
             Descriptif
           </p>
-          <p className={cn("rounded-2xl p-4 text-sm leading-6", darkMode ? "bg-slate-800 text-slate-200" : "bg-slate-50 text-slate-700")}>
+          <p
+            className={cn(
+              "rounded-2xl p-4 text-sm leading-6",
+              darkMode ? "bg-slate-800 text-slate-200" : "bg-slate-50 text-slate-700"
+            )}
+          >
             {item.description || "Aucune description enregistrée."}
           </p>
         </div>
@@ -1388,7 +1644,9 @@ function DetailsPanel({
                 onClick={onEdit}
                 className={cn(
                   "inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition",
-                  darkMode ? "border-slate-700 text-slate-100 hover:bg-slate-800" : "border-slate-200 text-slate-700 hover:bg-slate-50"
+                  darkMode
+                    ? "border-slate-700 text-slate-100 hover:bg-slate-800"
+                    : "border-slate-200 text-slate-700 hover:bg-slate-50"
                 )}
               >
                 <Pencil size={16} />
@@ -1568,19 +1826,35 @@ function ObjectFormModal({
           )}
         >
           <div>
-            <h2 className={cn("text-lg font-bold", darkMode ? "text-slate-100" : "text-slate-900")}>
+            <h2
+              className={cn(
+                "text-lg font-bold",
+                darkMode ? "text-slate-100" : "text-slate-900"
+              )}
+            >
               {mode === "create" ? "Ajouter une fiche" : "Modifier la fiche"}
             </h2>
-            <p className={cn("text-xs", darkMode ? "text-slate-400" : "text-slate-500")}>
+            <p
+              className={cn(
+                "text-xs",
+                darkMode ? "text-slate-400" : "text-slate-500"
+              )}
+            >
               Photo 800×800, mots-clés, don et informations détaillées
             </p>
           </div>
-          <button onClick={onClose} className="rounded-2xl p-2 text-slate-500 transition hover:bg-slate-100">
+          <button
+            onClick={onClose}
+            className="rounded-2xl p-2 text-slate-500 transition hover:bg-slate-100"
+          >
             <X size={18} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[1fr_360px]">
+        <form
+          onSubmit={handleSubmit}
+          className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[1fr_360px]"
+        >
           <div className="space-y-5">
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Nom de l'objet *" darkMode={darkMode}>
@@ -1605,7 +1879,9 @@ function ObjectFormModal({
             <Field label="Descriptif" darkMode={darkMode}>
               <textarea
                 value={form.description}
-                onChange={(e) => updateField("description", e.target.value.slice(0, 500))}
+                onChange={(e) =>
+                  updateField("description", e.target.value.slice(0, 500))
+                }
                 rows={5}
                 className={inputClass(darkMode)}
                 placeholder="Décris l'objet en quelques lignes..."
@@ -1652,10 +1928,20 @@ function ObjectFormModal({
                   className="h-5 w-5 rounded border-slate-300 accent-blue-600"
                 />
                 <div>
-                  <p className={cn("text-sm font-semibold", darkMode ? "text-slate-100" : "text-slate-900")}>
+                  <p
+                    className={cn(
+                      "text-sm font-semibold",
+                      darkMode ? "text-slate-100" : "text-slate-900"
+                    )}
+                  >
                     Cet objet provient d'un don
                   </p>
-                  <p className={cn("text-xs", darkMode ? "text-slate-400" : "text-slate-500")}>
+                  <p
+                    className={cn(
+                      "text-xs",
+                      darkMode ? "text-slate-400" : "text-slate-500"
+                    )}
+                  >
                     Affiche les champs donateur, date et numéro de don
                   </p>
                 </div>
@@ -1666,7 +1952,9 @@ function ObjectFormModal({
                   <Field label="Numéro de don" darkMode={darkMode}>
                     <input
                       value={form.donation_number}
-                      onChange={(e) => updateField("donation_number", e.target.value)}
+                      onChange={(e) =>
+                        updateField("donation_number", e.target.value)
+                      }
                       className={inputClass(darkMode)}
                       placeholder="DON-014"
                     />
@@ -1676,7 +1964,9 @@ function ObjectFormModal({
                     <input
                       type="date"
                       value={form.donation_date}
-                      onChange={(e) => updateField("donation_date", e.target.value)}
+                      onChange={(e) =>
+                        updateField("donation_date", e.target.value)
+                      }
                       className={inputClass(darkMode)}
                     />
                   </Field>
@@ -1693,7 +1983,13 @@ function ObjectFormModal({
               )}
             </div>
 
-            {error && <Alert type="error" message={error} onClose={() => setError("")} />}
+            {error && (
+              <Alert
+                type="error"
+                message={error}
+                onClose={() => setError("")}
+              />
+            )}
 
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
               <button
@@ -1701,7 +1997,9 @@ function ObjectFormModal({
                 onClick={onClose}
                 className={cn(
                   "rounded-2xl border px-4 py-3 text-sm font-semibold transition",
-                  darkMode ? "border-slate-700 text-slate-100 hover:bg-slate-800" : "border-slate-200 text-slate-700 hover:bg-slate-50"
+                  darkMode
+                    ? "border-slate-700 text-slate-100 hover:bg-slate-800"
+                    : "border-slate-200 text-slate-700 hover:bg-slate-50"
                 )}
               >
                 Annuler
@@ -1727,9 +2025,18 @@ function ObjectFormModal({
                 darkMode ? "border-slate-700 bg-slate-900" : "border-slate-200 bg-white"
               )}
             >
-              <div className={cn("aspect-square", darkMode ? "bg-slate-800" : "bg-slate-100")}>
+              <div
+                className={cn(
+                  "aspect-square",
+                  darkMode ? "bg-slate-800" : "bg-slate-100"
+                )}
+              >
                 {previewUrl ? (
-                  <img src={previewUrl} alt="Aperçu" className="h-full w-full object-cover" />
+                  <img
+                    src={previewUrl}
+                    alt="Aperçu"
+                    className="h-full w-full object-cover"
+                  />
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-400">
                     <ImageIcon size={44} />
@@ -1741,7 +2048,9 @@ function ObjectFormModal({
                 <label
                   className={cn(
                     "flex cursor-pointer items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition",
-                    darkMode ? "border-slate-700 bg-slate-800 text-slate-100 hover:bg-slate-700" : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+                    darkMode
+                      ? "border-slate-700 bg-slate-800 text-slate-100 hover:bg-slate-700"
+                      : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
                   )}
                 >
                   <Camera size={16} />
@@ -1754,8 +2063,14 @@ function ObjectFormModal({
                     className="hidden"
                   />
                 </label>
-                <p className={cn("mt-3 text-xs leading-5", darkMode ? "text-slate-400" : "text-slate-500")}>
-                  L’image est automatiquement recadrée au carré et convertie en 800×800 px.
+                <p
+                  className={cn(
+                    "mt-3 text-xs leading-5",
+                    darkMode ? "text-slate-400" : "text-slate-500"
+                  )}
+                >
+                  L’image est automatiquement recadrée au carré et convertie en
+                  800×800 px.
                 </p>
               </div>
             </div>
@@ -1768,9 +2083,21 @@ function ObjectFormModal({
 
 function StatCard({ label, value, darkMode }) {
   return (
-    <div className={cn("rounded-2xl px-3 py-4", darkMode ? "bg-slate-800" : "bg-slate-50")}>
+    <div
+      className={cn(
+        "rounded-2xl px-3 py-4",
+        darkMode ? "bg-slate-800" : "bg-slate-50"
+      )}
+    >
       <p className="text-xl font-bold">{value}</p>
-      <p className={cn("text-xs", darkMode ? "text-slate-400" : "text-slate-500")}>{label}</p>
+      <p
+        className={cn(
+          "text-xs",
+          darkMode ? "text-slate-400" : "text-slate-500"
+        )}
+      >
+        {label}
+      </p>
     </div>
   );
 }
@@ -1782,10 +2109,18 @@ function Alert({ type = "info", message, onClose }) {
       : "border-blue-200 bg-blue-50 text-blue-800";
 
   return (
-    <div className={cn("flex items-start justify-between gap-3 rounded-2xl border px-4 py-3 text-sm", styles)}>
+    <div
+      className={cn(
+        "flex items-start justify-between gap-3 rounded-2xl border px-4 py-3 text-sm",
+        styles
+      )}
+    >
       <p>{message}</p>
       {onClose && (
-        <button onClick={onClose} className="rounded-xl p-1 opacity-70 hover:opacity-100">
+        <button
+          onClick={onClose}
+          className="rounded-xl p-1 opacity-70 hover:opacity-100"
+        >
           <X size={16} />
         </button>
       )}
@@ -1796,7 +2131,12 @@ function Alert({ type = "info", message, onClose }) {
 function Field({ label, children, darkMode = false }) {
   return (
     <label className="block">
-      <span className={cn("mb-2 block text-sm font-semibold", darkMode ? "text-slate-100" : "text-slate-800")}>
+      <span
+        className={cn(
+          "mb-2 block text-sm font-semibold",
+          darkMode ? "text-slate-100" : "text-slate-800"
+        )}
+      >
         {label}
       </span>
       {children}
@@ -1820,11 +2160,22 @@ function EmptyState({ onAdd, darkMode }) {
       >
         <Filter size={24} />
       </div>
-      <h3 className={cn("mt-4 text-lg font-semibold", darkMode ? "text-slate-100" : "text-slate-900")}>
+      <h3
+        className={cn(
+          "mt-4 text-lg font-semibold",
+          darkMode ? "text-slate-100" : "text-slate-900"
+        )}
+      >
         Aucun objet trouvé
       </h3>
-      <p className={cn("mt-2 text-sm leading-6", darkMode ? "text-slate-400" : "text-slate-500")}>
-        Modifie les filtres ou ajoute une nouvelle fiche pour commencer l’inventaire.
+      <p
+        className={cn(
+          "mt-2 text-sm leading-6",
+          darkMode ? "text-slate-400" : "text-slate-500"
+        )}
+      >
+        Modifie les filtres ou ajoute une nouvelle fiche pour commencer
+        l’inventaire.
       </p>
       {onAdd && (
         <button
@@ -1841,7 +2192,12 @@ function EmptyState({ onAdd, darkMode }) {
 
 function InfoRow({ icon, label, value, darkMode = false }) {
   return (
-    <div className={cn("rounded-2xl p-4", darkMode ? "bg-slate-800" : "bg-slate-50")}>
+    <div
+      className={cn(
+        "rounded-2xl p-4",
+        darkMode ? "bg-slate-800" : "bg-slate-50"
+      )}
+    >
       <div
         className={cn(
           "mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide",
@@ -1851,7 +2207,14 @@ function InfoRow({ icon, label, value, darkMode = false }) {
         {icon}
         <span>{label}</span>
       </div>
-      <p className={cn("text-sm", darkMode ? "text-slate-100" : "text-slate-800")}>{value}</p>
+      <p
+        className={cn(
+          "text-sm",
+          darkMode ? "text-slate-100" : "text-slate-800"
+        )}
+      >
+        {value}
+      </p>
     </div>
   );
 }
@@ -1867,11 +2230,31 @@ function LoadingState({ darkMode }) {
             darkMode ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"
           )}
         >
-          <div className={cn("aspect-square animate-pulse", darkMode ? "bg-slate-800" : "bg-slate-100")} />
+          <div
+            className={cn(
+              "aspect-square animate-pulse",
+              darkMode ? "bg-slate-800" : "bg-slate-100"
+            )}
+          />
           <div className="space-y-3 p-4">
-            <div className={cn("h-5 animate-pulse rounded-xl", darkMode ? "bg-slate-800" : "bg-slate-100")} />
-            <div className={cn("h-4 w-2/3 animate-pulse rounded-xl", darkMode ? "bg-slate-800" : "bg-slate-100")} />
-            <div className={cn("h-16 animate-pulse rounded-2xl", darkMode ? "bg-slate-800" : "bg-slate-100")} />
+            <div
+              className={cn(
+                "h-5 animate-pulse rounded-xl",
+                darkMode ? "bg-slate-800" : "bg-slate-100"
+              )}
+            />
+            <div
+              className={cn(
+                "h-4 w-2/3 animate-pulse rounded-xl",
+                darkMode ? "bg-slate-800" : "bg-slate-100"
+              )}
+            />
+            <div
+              className={cn(
+                "h-16 animate-pulse rounded-2xl",
+                darkMode ? "bg-slate-800" : "bg-slate-100"
+              )}
+            />
           </div>
         </div>
       ))}
@@ -2071,7 +2454,9 @@ function RoomsSettingsModal({ rooms, darkMode, onClose, onChanged }) {
                 >
                   <div className="flex flex-col gap-3">
                     <input
-                      value={renamingRoomId === room.id ? renameValue : room.name}
+                      value={
+                        renamingRoomId === room.id ? renameValue : room.name
+                      }
                       onFocus={() => {
                         setRenamingRoomId(room.id);
                         setRenameValue(room.name);
