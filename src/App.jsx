@@ -23,6 +23,7 @@ const isSupabaseConfigured =
   SUPABASE_URL.startsWith("https://");
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const base = import.meta.env.BASE_URL;
 
 const ROLE_LABELS = {
   super_admin: "Super admin",
@@ -661,14 +662,14 @@ function AuthScreen() {
           className="relative overflow-hidden rounded-[2rem] border border-white/10 p-8 text-white shadow-2xl sm:p-10"
           style={{
             backgroundImage:
-              "linear-gradient(rgba(2,6,23,0.76), rgba(2,6,23,0.88)), url('/login-bg.jpg')",
+              `linear-gradient(rgba(2,6,23,0.76), rgba(2,6,23,0.88)), url('${base}login-bg.jpg')`,
             backgroundSize: "cover",
             backgroundPosition: "center",
           }}
         >
           <div className="inline-flex items-center gap-3 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur">
             <img
-              src="/icon.png"
+              src={`${base}icon.png`}
               alt="Icône musée"
               className="h-10 w-10 rounded-xl object-cover"
             />
@@ -682,7 +683,7 @@ function AuthScreen() {
 
           <div className="mt-10 flex justify-center">
             <img
-              src="/icon.png"
+              src={`${base}icon.png`}
               alt="Logo musée"
               className="w-full max-w-[360px] rounded-[2rem] border border-white/20 bg-white/90 p-4 shadow-2xl"
             />
@@ -766,7 +767,7 @@ function TopBar({
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-slate-900 text-white shadow-sm">
-            <img src="/icon.png" alt="Logo musée" className="h-full w-full object-cover" />
+            <img src={`${base}icon.png`} alt="Logo musée" className="h-full w-full object-cover" />
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">Catalogue du musée</p>
