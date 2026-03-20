@@ -135,6 +135,7 @@ async function resizeToSquare800(file) {
     type: "image/jpeg",
   });
 }
+
 function ChangelogModal({ darkMode, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
@@ -190,8 +191,16 @@ function ChangelogModal({ darkMode, onClose }) {
                   : "border-slate-200 bg-slate-50"
               )}
             >
-              <div className="text-sm font-semibold">
-                Version {entry.version} — {entry.date}
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold">
+                  Version {entry.version} — {entry.date}
+                </div>
+
+                {entry.version === APP_VERSION.version && (
+                  <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                    Actuelle
+                  </span>
+                )}
               </div>
 
               <ul className="mt-3 space-y-2 text-sm">
@@ -206,6 +215,127 @@ function ChangelogModal({ darkMode, onClose }) {
     </div>
   );
 }
+
+function getChangedFields(oldData, newData) {
+  if (!oldData || !newData) return [];
+
+  const ignoredFields = ["updated_at", "created_at", "photo_path"];
+  const keys = new Set([...Object.keys(oldData), ...Object.keys(newData)]);
+  const changes = [];
+
+  for (const key of keys) {
+    if (ignoredFields.includes(key)) continue;
+
+    const before = oldData[key];
+    const after = newData[key];
+
+    if (JSON.stringify(before) !== JSON.stringify(after)) {
+      changes.push({ field: key, before, after });
+    }
+  }
+
+  return changes;
+}
+
+function formatHistoryValue(value) {
+  if (value === null || value === undefined || value === "") return "vide";
+  if (Array.isArray(value)) return value.join(", ");
+  if (typeof value === "boolean") return value ? "Oui" : "Non";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function actionLabel(action) {
+  switch (action) {
+    case "create":
+      return "a créé la fiche";
+    case "update":
+      return "a modifié la fiche";
+    case "delete":
+      return "a supprimé la fiche";
+    default:
+      return "a effectué une action";
+  }
+}
+
+function HistoryPanel({ history, darkMode }) {
+  return (
+    <div
+      className={cn(
+        "mt-5 rounded-3xl border p-4",
+        darkMode
+          ? "border-slate-800 bg-slate-950"
+          : "border-slate-200 bg-slate-50"
+      )}
+    >
+      <h3 className="text-sm font-bold">Historique des modifications</h3>
+
+      <div className="mt-3 space-y-3">
+        {history.length === 0 ? (
+          <p
+            className={cn(
+              "text-sm",
+              darkMode ? "text-slate-400" : "text-slate-500"
+            )}
+          >
+            Aucun historique disponible.
+          </p>
+        ) : (
+          history.map((entry) => {
+            const changes = getChangedFields(entry.old_data, entry.new_data);
+
+            return (
+              <div
+                key={entry.id}
+                className={cn(
+                  "rounded-2xl border p-3 text-sm",
+                  darkMode
+                    ? "border-slate-800 bg-slate-900"
+                    : "border-slate-200 bg-white"
+                )}
+              >
+                <p className="font-semibold">
+                  {entry.changed_by_name || "Utilisateur inconnu"}{" "}
+                  {actionLabel(entry.action)}
+                </p>
+
+                <p
+                  className={cn(
+                    "mt-1 text-xs",
+                    darkMode ? "text-slate-400" : "text-slate-500"
+                  )}
+                >
+                  {new Date(entry.changed_at).toLocaleString("fr-FR")}
+                </p>
+
+                {entry.action === "update" && changes.length > 0 && (
+                  <ul className="mt-3 space-y-2 text-xs">
+                    {changes.map((change) => (
+                      <li key={change.field} className="leading-5">
+                        <span className="font-semibold">{change.field}</span> :{" "}
+                        {formatHistoryValue(change.before)} →{" "}
+                        {formatHistoryValue(change.after)}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {entry.action === "create" && (
+                  <p className="mt-3 text-xs">Création de la fiche.</p>
+                )}
+
+                {entry.action === "delete" && (
+                  <p className="mt-3 text-xs">Suppression de la fiche.</p>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -215,6 +345,7 @@ function App() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [showChangelog, setShowChangelog] = useState(false);
+  const [objectHistory, setObjectHistory] = useState([]);
 
   const [search, setSearch] = useState("");
   const [roomFilter, setRoomFilter] = useState("all");
@@ -244,13 +375,13 @@ function App() {
   }, [darkMode]);
 
   useEffect(() => {
-  const hasModalOpen = settingsOpen || !!formMode;
-  document.body.style.overflow = hasModalOpen ? "hidden" : "";
+    const hasModalOpen = settingsOpen || !!formMode || showChangelog;
+    document.body.style.overflow = hasModalOpen ? "hidden" : "";
 
-  return () => {
-    document.body.style.overflow = "";
-  };
-}, [settingsOpen, formMode]);
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [settingsOpen, formMode, showChangelog]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -283,6 +414,17 @@ function App() {
     bootstrap();
   }, [session]);
 
+  useEffect(() => {
+    if (!selectedObject?.id) {
+      setObjectHistory([]);
+      return;
+    }
+
+    loadObjectHistory(selectedObject.id).catch((e) => {
+      console.error("Erreur chargement historique :", e);
+    });
+  }, [selectedObject]);
+
   async function bootstrap() {
     try {
       setLoading(true);
@@ -293,6 +435,17 @@ function App() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function loadObjectHistory(objectId) {
+    const { data, error } = await supabase
+      .from("museum_object_history")
+      .select("*")
+      .eq("object_id", objectId)
+      .order("changed_at", { ascending: false });
+
+    if (error) throw error;
+    setObjectHistory(data || []);
   }
 
   async function loadProfile() {
@@ -330,13 +483,14 @@ function App() {
     await supabase.auth.signOut();
   }
 
-const isSuperAdmin = profile?.role === "super_admin";
-const isAdmin = profile?.role === "admin";
+  const isSuperAdmin = profile?.role === "super_admin";
+  const isAdmin = profile?.role === "admin";
 
-const canAdd = isAdmin || isSuperAdmin;
-const canEdit = isAdmin || isSuperAdmin;
-const canDelete = isSuperAdmin;
-const canManageSettings = isSuperAdmin;
+  const canAdd = isAdmin || isSuperAdmin;
+  const canEdit = isAdmin || isSuperAdmin;
+  const canDelete = isSuperAdmin;
+  const canManageSettings = isSuperAdmin;
+
   const filteredObjects = useMemo(() => {
     let list = [...objects];
     const q = search.trim().toLowerCase();
@@ -470,7 +624,9 @@ const canManageSettings = isSuperAdmin;
           <div
             className={cn(
               "rounded-3xl border p-4 shadow-sm sm:p-5",
-              darkMode ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"
+              darkMode
+                ? "border-slate-800 bg-slate-900"
+                : "border-slate-200 bg-white"
             )}
           >
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -478,16 +634,16 @@ const canManageSettings = isSuperAdmin;
                 <h1 className="text-2xl font-bold tracking-tight">
                   Inventaire du musée
                 </h1>
-                <p className={cn("mt-1 text-sm", darkMode ? "text-slate-400" : "text-slate-600")}>
+                <p
+                  className={cn(
+                    "mt-1 text-sm",
+                    darkMode ? "text-slate-400" : "text-slate-600"
+                  )}
+                >
                   Recherche, tri, consultation et gestion des fiches objets.
                 </p>
-                      {showChangelog && (
-        <ChangelogModal
-          darkMode={darkMode}
-          onClose={() => setShowChangelog(false)}
-        />
-      )}
               </div>
+
               {canAdd && (
                 <button
                   onClick={openCreate}
@@ -503,7 +659,9 @@ const canManageSettings = isSuperAdmin;
           <div
             className={cn(
               "rounded-3xl border p-4 shadow-sm sm:p-5",
-              darkMode ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"
+              darkMode
+                ? "border-slate-800 bg-slate-900"
+                : "border-slate-200 bg-white"
             )}
           >
             <div className="flex items-start gap-3">
@@ -515,6 +673,7 @@ const canManageSettings = isSuperAdmin;
               >
                 {ROLE_LABELS[profile?.role] || "Utilisateur"}
               </div>
+
               <div className="min-w-0">
                 <p
                   className={cn(
@@ -536,7 +695,11 @@ const canManageSettings = isSuperAdmin;
             </div>
 
             <div className="mt-4 grid grid-cols-3 gap-3 text-center">
-              <StatCard label="Objets" value={objects.length} darkMode={darkMode} />
+              <StatCard
+                label="Objets"
+                value={objects.length}
+                darkMode={darkMode}
+              />
               <StatCard
                 label="Dons"
                 value={objects.filter((o) => o.is_donation).length}
@@ -544,7 +707,9 @@ const canManageSettings = isSuperAdmin;
               />
               <StatCard
                 label="Salles"
-                value={[...new Set(objects.map((o) => o.room).filter(Boolean))].length}
+                value={[
+                  ...new Set(objects.map((o) => o.room).filter(Boolean)),
+                ].length}
                 darkMode={darkMode}
               />
             </div>
@@ -553,15 +718,29 @@ const canManageSettings = isSuperAdmin;
 
         {(error || info) && (
           <div className="mb-4 space-y-2">
-            {error && <Alert type="error" message={error} onClose={() => setError("")} />}
-            {info && <Alert type="info" message={info} onClose={() => setInfo("")} />}
+            {error && (
+              <Alert
+                type="error"
+                message={error}
+                onClose={() => setError("")}
+              />
+            )}
+            {info && (
+              <Alert
+                type="info"
+                message={info}
+                onClose={() => setInfo("")}
+              />
+            )}
           </div>
         )}
 
         <section
           className={cn(
             "mb-6 rounded-3xl border p-4 shadow-sm sm:p-5",
-            darkMode ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"
+            darkMode
+              ? "border-slate-800 bg-slate-900"
+              : "border-slate-200 bg-white"
           )}
         >
           <div className="grid gap-3 lg:grid-cols-[2fr_1fr_1fr_1fr]">
@@ -626,7 +805,10 @@ const canManageSettings = isSuperAdmin;
           <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
             <div>
               {filteredObjects.length === 0 ? (
-                <EmptyState onAdd={canAdd ? openCreate : null} darkMode={darkMode} />
+                <EmptyState
+                  onAdd={canAdd ? openCreate : null}
+                  darkMode={darkMode}
+                />
               ) : (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
                   {filteredObjects.map((item) => (
@@ -648,6 +830,7 @@ const canManageSettings = isSuperAdmin;
             <aside className="xl:sticky xl:top-24 xl:self-start">
               <DetailsPanel
                 item={selectedObject}
+                history={objectHistory}
                 onClose={() => setSelectedObject(null)}
                 onEdit={() => selectedObject && openEdit(selectedObject)}
                 onDelete={() => selectedObject && handleDelete(selectedObject)}
@@ -659,20 +842,21 @@ const canManageSettings = isSuperAdmin;
           </section>
         )}
       </main>
+
       <footer className="px-4 pb-6 text-center sm:px-6 lg:px-8">
-  <button
-    type="button"
-    onClick={() => setShowChangelog(true)}
-    className={cn(
-      "text-xs underline underline-offset-2 transition",
-      darkMode
-        ? "text-slate-400 hover:text-slate-200"
-        : "text-slate-500 hover:text-slate-700"
-    )}
-  >
-    {`V${APP_VERSION.version} du ${APP_VERSION.date} by ${APP_VERSION.author}`}
-  </button>
-</footer>
+        <button
+          type="button"
+          onClick={() => setShowChangelog(true)}
+          className={cn(
+            "text-xs underline underline-offset-2 transition",
+            darkMode
+              ? "text-slate-400 hover:text-slate-200"
+              : "text-slate-500 hover:text-slate-700"
+          )}
+        >
+          {`V${APP_VERSION.version} du ${APP_VERSION.date} by ${APP_VERSION.author}`}
+        </button>
+      </footer>
 
       {formMode && (
         <ObjectFormModal
@@ -699,6 +883,13 @@ const canManageSettings = isSuperAdmin;
           }}
         />
       )}
+
+      {showChangelog && (
+        <ChangelogModal
+          darkMode={darkMode}
+          onClose={() => setShowChangelog(false)}
+        />
+      )}
     </div>
   );
 }
@@ -712,7 +903,8 @@ function ConfigurationScreen() {
           Remplace les constantes <code>SUPABASE_URL</code> et{" "}
           <code>SUPABASE_ANON_KEY</code> dans le code. Ensuite, crée les tables{" "}
           <code>profiles</code>, <code>museum_objects</code> et{" "}
-          <code>museum_rooms</code>, puis le bucket <code>museum-photos</code>.
+          <code>museum_rooms</code>, puis le bucket{" "}
+          <code>museum-photos</code>.
         </p>
       </div>
     </div>
@@ -739,7 +931,10 @@ function AuthScreen() {
 
     try {
       const email = normalizeLoginToEmail(identifier);
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
       if (error) throw error;
     } catch (e) {
       setAuthError(e.message || "Authentification impossible.");
@@ -754,8 +949,7 @@ function AuthScreen() {
         <div
           className="relative overflow-hidden rounded-[2rem] border border-white/10 p-8 text-white shadow-2xl sm:p-10"
           style={{
-            backgroundImage:
-              `linear-gradient(rgba(2,6,23,0.76), rgba(2,6,23,0.88)), url('${base}login-bg.jpg')`,
+            backgroundImage: `linear-gradient(rgba(2,6,23,0.76), rgba(2,6,23,0.88)), url('${base}login-bg.jpg')`,
             backgroundSize: "cover",
             backgroundPosition: "center",
           }}
@@ -854,17 +1048,28 @@ function TopBar({
     <header
       className={cn(
         "sticky top-0 z-30 border-b backdrop-blur",
-        darkMode ? "border-slate-800 bg-slate-900/90" : "border-slate-200 bg-white/90"
+        darkMode
+          ? "border-slate-800 bg-slate-900/90"
+          : "border-slate-200 bg-white/90"
       )}
     >
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-slate-900 text-white shadow-sm">
-            <img src={`${base}icon.png`} alt="Logo musée" className="h-full w-full object-cover" />
+            <img
+              src={`${base}icon.png`}
+              alt="Logo musée"
+              className="h-full w-full object-cover"
+            />
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">Catalogue du musée</p>
-            <p className={cn("truncate text-xs", darkMode ? "text-slate-400" : "text-slate-500")}>
+            <p
+              className={cn(
+                "truncate text-xs",
+                darkMode ? "text-slate-400" : "text-slate-500"
+              )}
+            >
               PWA responsive de gestion des objets
             </p>
           </div>
@@ -924,9 +1129,18 @@ function TopBar({
   );
 }
 
-function ObjectCard({ item, onOpen, onEdit, onDelete, canEdit, canDelete, darkMode }) {
+function ObjectCard({
+  item,
+  onOpen,
+  onEdit,
+  onDelete,
+  canEdit,
+  canDelete,
+  darkMode,
+}) {
   const imageUrl = item.photo_path
-    ? supabase.storage.from("museum-photos").getPublicUrl(item.photo_path).data.publicUrl
+    ? supabase.storage.from("museum-photos").getPublicUrl(item.photo_path).data
+        .publicUrl
     : null;
 
   return (
@@ -950,10 +1164,20 @@ function ObjectCard({ item, onOpen, onEdit, onDelete, canEdit, canDelete, darkMo
         <div className={cn("space-y-3 p-4", darkMode ? "text-slate-100" : "text-slate-900")}>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h3 className={cn("truncate text-base font-bold", darkMode ? "text-slate-100" : "text-slate-900")}>
+              <h3
+                className={cn(
+                  "truncate text-base font-bold",
+                  darkMode ? "text-slate-100" : "text-slate-900"
+                )}
+              >
                 {item.name}
               </h3>
-              <p className={cn("mt-1 truncate text-sm", darkMode ? "text-slate-400" : "text-slate-500")}>
+              <p
+                className={cn(
+                  "mt-1 truncate text-sm",
+                  darkMode ? "text-slate-400" : "text-slate-500"
+                )}
+              >
                 {item.reference}
               </p>
             </div>
@@ -969,7 +1193,12 @@ function ObjectCard({ item, onOpen, onEdit, onDelete, canEdit, canDelete, darkMo
               <MapPin size={15} className="text-slate-400" />
               <span className="truncate">{item.room || DEFAULT_ROOM_LABEL}</span>
             </div>
-            <div className={cn("line-clamp-2 min-h-[2.5rem] text-sm leading-5", darkMode ? "text-slate-300" : "text-slate-600")}>
+            <div
+              className={cn(
+                "line-clamp-2 min-h-[2.5rem] text-sm leading-5",
+                darkMode ? "text-slate-300" : "text-slate-600"
+              )}
+            >
               {item.description || "Aucune description."}
             </div>
           </div>
@@ -1021,7 +1250,16 @@ function ObjectCard({ item, onOpen, onEdit, onDelete, canEdit, canDelete, darkMo
   );
 }
 
-function DetailsPanel({ item, onClose, onEdit, onDelete, canEdit, canDelete, darkMode }) {
+function DetailsPanel({
+  item,
+  history,
+  onClose,
+  onEdit,
+  onDelete,
+  canEdit,
+  canDelete,
+  darkMode,
+}) {
   if (!item) {
     return (
       <div
@@ -1030,7 +1268,12 @@ function DetailsPanel({ item, onClose, onEdit, onDelete, canEdit, canDelete, dar
           darkMode ? "border-slate-700 bg-slate-900" : "border-slate-300 bg-white"
         )}
       >
-        <div className={cn("mx-auto flex h-14 w-14 items-center justify-center rounded-2xl text-slate-400", darkMode ? "bg-slate-800" : "bg-slate-100")}>
+        <div
+          className={cn(
+            "mx-auto flex h-14 w-14 items-center justify-center rounded-2xl text-slate-400",
+            darkMode ? "bg-slate-800" : "bg-slate-100"
+          )}
+        >
           <Search size={24} />
         </div>
         <h3 className={cn("mt-4 text-lg font-semibold", darkMode ? "text-slate-100" : "text-slate-900")}>
@@ -1044,7 +1287,8 @@ function DetailsPanel({ item, onClose, onEdit, onDelete, canEdit, canDelete, dar
   }
 
   const imageUrl = item.photo_path
-    ? supabase.storage.from("museum-photos").getPublicUrl(item.photo_path).data.publicUrl
+    ? supabase.storage.from("museum-photos").getPublicUrl(item.photo_path).data
+        .publicUrl
     : null;
 
   return (
@@ -1097,6 +1341,7 @@ function DetailsPanel({ item, onClose, onEdit, onDelete, canEdit, canDelete, dar
           value={item.room || DEFAULT_ROOM_LABEL}
           darkMode={darkMode}
         />
+
         <InfoRow
           icon={<Hash size={16} />}
           label="Mots-clés"
@@ -1161,6 +1406,8 @@ function DetailsPanel({ item, onClose, onEdit, onDelete, canEdit, canDelete, dar
             )}
           </div>
         )}
+
+        <HistoryPanel history={history || []} darkMode={darkMode} />
       </div>
     </div>
   );
@@ -1193,7 +1440,8 @@ function ObjectFormModal({
   const [imageFile, setImageFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(() => {
     if (initialData?.photo_path) {
-      return supabase.storage.from("museum-photos").getPublicUrl(initialData.photo_path).data.publicUrl;
+      return supabase.storage.from("museum-photos").getPublicUrl(initialData.photo_path).data
+        .publicUrl;
     }
     return "";
   });
@@ -1242,7 +1490,8 @@ function ObjectFormModal({
         tags: normalizeTags(form.tagsInput),
         is_donation: form.is_donation,
         donation_number: form.is_donation ? form.donation_number.trim() : null,
-        donation_date: form.is_donation && form.donation_date ? form.donation_date : null,
+        donation_date:
+          form.is_donation && form.donation_date ? form.donation_date : null,
         donor_name: form.is_donation ? form.donor_name.trim() : null,
       };
 
@@ -1276,7 +1525,10 @@ function ObjectFormModal({
         const path = `${record.id}/photo.jpg`;
         const { error: uploadError } = await supabase.storage
           .from("museum-photos")
-          .upload(path, imageFile, { upsert: true, contentType: "image/jpeg" });
+          .upload(path, imageFile, {
+            upsert: true,
+            contentType: "image/jpeg",
+          });
 
         if (uploadError) throw uploadError;
 
@@ -1310,7 +1562,9 @@ function ObjectFormModal({
         <div
           className={cn(
             "sticky top-0 z-10 flex items-center justify-between border-b px-5 py-4 backdrop-blur sm:px-6",
-            darkMode ? "border-slate-800 bg-slate-900/95" : "border-slate-100 bg-white/95"
+            darkMode
+              ? "border-slate-800 bg-slate-900/95"
+              : "border-slate-100 bg-white/95"
           )}
         >
           <div>
@@ -1367,10 +1621,10 @@ function ObjectFormModal({
                 >
                   <option value="">{DEFAULT_ROOM_LABEL}</option>
                   {rooms.map((room) => (
-  <option key={room.id} value={room.name}>
-    {room.name}
-  </option>
-))}
+                    <option key={room.id} value={room.name}>
+                      {room.name}
+                    </option>
+                  ))}
                 </select>
               </Field>
 
@@ -1457,7 +1711,11 @@ function ObjectFormModal({
                 disabled={saving}
                 className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
               >
-                {saving ? "Enregistrement..." : mode === "create" ? "Créer la fiche" : "Enregistrer les modifications"}
+                {saving
+                  ? "Enregistrement..."
+                  : mode === "create"
+                  ? "Créer la fiche"
+                  : "Enregistrer les modifications"}
               </button>
             </div>
           </div>
@@ -1554,7 +1812,12 @@ function EmptyState({ onAdd, darkMode }) {
         darkMode ? "border-slate-700 bg-slate-900" : "border-slate-300 bg-white"
       )}
     >
-      <div className={cn("mx-auto flex h-14 w-14 items-center justify-center rounded-2xl", darkMode ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-400")}>
+      <div
+        className={cn(
+          "mx-auto flex h-14 w-14 items-center justify-center rounded-2xl",
+          darkMode ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-400"
+        )}
+      >
         <Filter size={24} />
       </div>
       <h3 className={cn("mt-4 text-lg font-semibold", darkMode ? "text-slate-100" : "text-slate-900")}>
@@ -1579,7 +1842,12 @@ function EmptyState({ onAdd, darkMode }) {
 function InfoRow({ icon, label, value, darkMode = false }) {
   return (
     <div className={cn("rounded-2xl p-4", darkMode ? "bg-slate-800" : "bg-slate-50")}>
-      <div className={cn("mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide", darkMode ? "text-slate-400" : "text-slate-500")}>
+      <div
+        className={cn(
+          "mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide",
+          darkMode ? "text-slate-400" : "text-slate-500"
+        )}
+      >
         {icon}
         <span>{label}</span>
       </div>
@@ -1610,6 +1878,7 @@ function LoadingState({ darkMode }) {
     </div>
   );
 }
+
 function RoomsSettingsModal({ rooms, darkMode, onClose, onChanged }) {
   const [newRoom, setNewRoom] = useState("");
   const [renamingRoomId, setRenamingRoomId] = useState(null);
@@ -1848,4 +2117,5 @@ function RoomsSettingsModal({ rooms, darkMode, onClose, onChanged }) {
     </div>
   );
 }
+
 export default App;
