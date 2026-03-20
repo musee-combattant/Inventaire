@@ -4,8 +4,13 @@ import App from "./App";
 import "./index.css";
 import { registerSW } from "virtual:pwa-register";
 
-registerSW({
-  immediate: true
+const updateSW = registerSW({
+  onNeedRefresh() {
+    updateSW(true);
+  },
+  onOfflineReady() {
+    console.log("Application prête hors ligne.");
+  },
 });
 
 ReactDOM.createRoot(document.getElementById("root")).render(

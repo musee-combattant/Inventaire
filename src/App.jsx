@@ -1517,7 +1517,6 @@ function LoadingState({ darkMode }) {
     </div>
   );
 }
-
 function RoomsSettingsModal({ rooms, darkMode, onClose, onChanged }) {
   const [newRoom, setNewRoom] = useState("");
   const [renamingRoomId, setRenamingRoomId] = useState(null);
@@ -1617,7 +1616,7 @@ function RoomsSettingsModal({ rooms, darkMode, onClose, onChanged }) {
     <div className="fixed inset-0 z-50 bg-slate-900/60 sm:flex sm:items-center sm:justify-center sm:p-4">
       <div
         className={cn(
-          "fixed inset-x-0 bottom-0 max-h-[88dvh] overflow-hidden rounded-t-[2rem] border shadow-2xl sm:static sm:w-full sm:max-w-2xl sm:max-h-[85vh] sm:rounded-[2rem]",
+          "fixed inset-x-0 bottom-0 flex max-h-[88dvh] flex-col overflow-hidden rounded-t-[2rem] border shadow-2xl sm:static sm:w-full sm:max-w-2xl sm:max-h-[85vh] sm:rounded-[2rem]",
           darkMode
             ? "border-slate-800 bg-slate-900 text-slate-100"
             : "border-slate-200 bg-white text-slate-900"
@@ -1625,7 +1624,7 @@ function RoomsSettingsModal({ rooms, darkMode, onClose, onChanged }) {
       >
         <div
           className={cn(
-            "sticky top-0 z-10 flex items-center justify-between border-b px-5 py-4",
+            "sticky top-0 z-10 flex shrink-0 items-center justify-between border-b px-5 py-4",
             darkMode
               ? "border-slate-800 bg-slate-900"
               : "border-slate-200 bg-white"
@@ -1645,13 +1644,18 @@ function RoomsSettingsModal({ rooms, darkMode, onClose, onChanged }) {
 
           <button
             onClick={onClose}
-            className="rounded-2xl p-2 text-slate-500 transition hover:bg-slate-100"
+            className={cn(
+              "rounded-2xl p-2 transition",
+              darkMode
+                ? "text-slate-400 hover:bg-slate-800"
+                : "text-slate-500 hover:bg-slate-100"
+            )}
           >
             <X size={18} />
           </button>
         </div>
 
-        <div className="overflow-y-auto p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+        <div className="min-h-0 flex-1 overflow-y-auto p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row">
             <input
               value={newRoom}
@@ -1674,7 +1678,13 @@ function RoomsSettingsModal({ rooms, darkMode, onClose, onChanged }) {
             </button>
           </div>
 
-          {error && <Alert type="error" message={error} onClose={() => setError("")} />}
+          {error && (
+            <Alert
+              type="error"
+              message={error}
+              onClose={() => setError("")}
+            />
+          )}
 
           <div className="space-y-2">
             {rooms.length === 0 ? (
@@ -1745,6 +1755,4 @@ function RoomsSettingsModal({ rooms, darkMode, onClose, onChanged }) {
     </div>
   );
 }
-
-
 export default App;
