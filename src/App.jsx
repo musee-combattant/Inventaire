@@ -468,6 +468,7 @@ function App() {
   const [objectHistory, setObjectHistory] = useState([]);
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [globalHistory, setGlobalHistory] = useState([]);
+  const [objectLocks, setObjectLocks] = useState([]);
 
   const [search, setSearch] = useState("");
   const [roomFilter, setRoomFilter] = useState("all");
@@ -495,6 +496,18 @@ function App() {
       // ignore
     }
   }, [darkMode]);
+
+  useEffect(() => {
+  if (!session?.user) return;
+
+  loadObjectLocks().catch(console.error);
+
+  const interval = setInterval(() => {
+    loadObjectLocks().catch(console.error);
+  }, 10000);
+
+  return () => clearInterval(interval);
+}, [session]);
 
   useEffect(() => {
     const hasModalOpen =
@@ -535,6 +548,8 @@ function App() {
       return;
     }
 
+    
+
     bootstrap();
   }, [session]);
 
@@ -557,11 +572,99 @@ function App() {
     });
   }, [historyModalOpen]);
 
+async function loadObjectLocks() {
+  const nowIso = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from("museum_object_locks")
+    .select("*")
+    .gt("expires_at", nowIso);
+
+  if (error) throw error;
+
+  const locks = data || [];
+  setObjectLocks(locks);
+  return locks;
+}
+useEffect(() => {
+  if (!formMode || !editingObject?.id || !session?.user) return;
+
+  const interval = setInterval(async () => {
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 5 * 60 * 1000).toISOString();
+
+    await supabase.from("museum_object_locks").upsert({
+      object_id: editingObject.id,
+      locked_by: session.user.id,
+      locked_by_name: profile?.display_name || session.user.email,
+      locked_at: now.toISOString(),
+      expires_at: expiresAt,
+    });
+  }, 60000);
+
+  return () => clearInterval(interval);
+}, [formMode, editingObject, session, profile]);
+async function lockObject(item) {
+  if (!session?.user) {
+    return { ok: false, reason: "not-authenticated" };
+  }
+
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 5 * 60 * 1000).toISOString();
+
+  const freshLocks = await loadObjectLocks();
+
+  const existingLock = freshLocks.find(
+    (lock) =>
+      lock.object_id === item.id &&
+      new Date(lock.expires_at).getTime() > Date.now()
+  );
+
+  if (existingLock && existingLock.locked_by !== session.user.id) {
+    return {
+      ok: false,
+      reason: "locked",
+      lockedByName: existingLock.locked_by_name || "Utilisateur inconnu",
+    };
+  }
+
+  const { error } = await supabase.from("museum_object_locks").upsert({
+    object_id: item.id,
+    locked_by: session.user.id,
+    locked_by_name: profile?.display_name || session.user.email,
+    locked_at: now.toISOString(),
+    expires_at: expiresAt,
+  });
+
+  if (error) {
+    return {
+      ok: false,
+      reason: "db-error",
+      message: error.message,
+    };
+  }
+
+  await loadObjectLocks();
+  return { ok: true };
+}
+
+async function unlockObject(objectId) {
+  if (!session?.user || !objectId) return;
+
+  await supabase
+    .from("museum_object_locks")
+    .delete()
+    .eq("object_id", objectId)
+    .eq("locked_by", session.user.id);
+
+  await loadObjectLocks();
+}
+
   async function bootstrap() {
     try {
       setLoading(true);
       setError("");
-      await Promise.all([loadProfile(), loadObjects(), loadRooms()]);
+      await Promise.all([loadProfile(), loadObjects(), loadRooms(), loadObjectLocks()]);
     } catch (e) {
       setError(e.message || "Erreur de chargement.");
     } finally {
@@ -718,10 +821,22 @@ function App() {
     setFormMode("create");
   }
 
-  function openEdit(item) {
-    setEditingObject(item);
-    setFormMode("edit");
+async function openEdit(item) {
+  const result = await lockObject(item);
+
+  if (!result.ok) {
+    if (result.reason === "locked") {
+      setError(`Cette fiche est en cours de modification par ${result.lockedByName}.`);
+      return;
+    }
+
+    setError(result.message || "Impossible de verrouiller la fiche.");
+    return;
   }
+
+  setEditingObject(item);
+  setFormMode("edit");
+}
 
   async function handleSaved(saved, mode) {
     if (mode === "create") {
@@ -734,7 +849,7 @@ function App() {
       setSelectedObject((prev) => (prev?.id === saved.id ? saved : prev));
       setInfo("Fiche modifiée avec succès.");
     }
-
+    await unlockObject(saved.id);
     setFormMode(null);
     setEditingObject(null);
   }
@@ -958,16 +1073,18 @@ function App() {
               ) : (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
                   {filteredObjects.map((item) => (
-                    <ObjectCard
-                      key={item.id}
-                      item={item}
-                      onOpen={() => setSelectedObject(item)}
-                      onEdit={() => openEdit(item)}
-                      onDelete={() => handleDelete(item)}
-                      canEdit={canEdit}
-                      canDelete={canDelete}
-                      darkMode={darkMode}
-                    />
+                <ObjectCard
+  key={item.id}
+  item={item}
+  onOpen={() => setSelectedObject(item)}
+  onEdit={() => openEdit(item)}
+  onDelete={() => handleDelete(item)}
+  canEdit={canEdit}
+  canDelete={canDelete}
+  darkMode={darkMode}
+  locks={objectLocks}
+  currentUserId={session.user.id}
+/>
                   ))}
                 </div>
               )}
@@ -975,15 +1092,17 @@ function App() {
 
             <aside className="xl:sticky xl:top-24 xl:self-start">
               <DetailsPanel
-                item={selectedObject}
-                history={objectHistory}
-                onClose={() => setSelectedObject(null)}
-                onEdit={() => selectedObject && openEdit(selectedObject)}
-                onDelete={() => selectedObject && handleDelete(selectedObject)}
-                canEdit={canEdit}
-                canDelete={canDelete}
-                darkMode={darkMode}
-              />
+  item={selectedObject}
+  history={objectHistory}
+  onClose={() => setSelectedObject(null)}
+  onEdit={() => selectedObject && openEdit(selectedObject)}
+  onDelete={() => selectedObject && handleDelete(selectedObject)}
+  canEdit={canEdit}
+  canDelete={canDelete}
+  darkMode={darkMode}
+  locks={objectLocks}
+  currentUserId={session.user.id}
+/>
             </aside>
           </section>
         )}
@@ -1011,10 +1130,11 @@ function App() {
           initialData={editingObject}
           rooms={rooms}
           darkMode={darkMode}
-          onClose={() => {
-            setFormMode(null);
-            setEditingObject(null);
-          }}
+          onClose={async () => {
+  await unlockObject(editingObject?.id);
+  setFormMode(null);
+  setEditingObject(null);
+}}
           onSaved={handleSaved}
         />
       )}
@@ -1209,16 +1329,24 @@ function TopBar({
           : "border-slate-200 bg-white/90"
       )}
     >
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-3 py-3 sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-slate-900 text-white shadow-sm">
+          <div
+            className={cn(
+              "flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border p-1 shadow-sm",
+              darkMode
+                ? "border-slate-700 bg-slate-800"
+                : "border-slate-200 bg-white"
+            )}
+          >
             <img
               src={`${base}icon.png`}
               alt="Logo musée"
-              className="h-full w-full object-cover"
+              className="h-full w-full object-contain"
             />
           </div>
-          <div className="min-w-0">
+
+          <div className="hidden min-w-0 sm:block">
             <p className="truncate text-sm font-semibold">Catalogue du musée</p>
             <p
               className={cn(
@@ -1231,7 +1359,7 @@ function TopBar({
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           {canManageSettings && (
             <button
               onClick={onOpenSettings}
@@ -1242,7 +1370,8 @@ function TopBar({
                   : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
               )}
             >
-              ⚙️ Réglages
+              <span className="sm:hidden">⚙️</span>
+              <span className="hidden sm:inline">⚙️ Réglages</span>
             </button>
           )}
 
@@ -1256,7 +1385,8 @@ function TopBar({
                   : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
               )}
             >
-              🕘 Journal
+              <span className="sm:hidden">🕘</span>
+              <span className="hidden sm:inline">🕘 Journal</span>
             </button>
           )}
 
@@ -1269,12 +1399,15 @@ function TopBar({
                 : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
             )}
           >
-            {darkMode ? "☀️ Clair" : "🌙 Sombre"}
+            <span className="sm:hidden">{darkMode ? "☀️" : "🌙"}</span>
+            <span className="hidden sm:inline">
+              {darkMode ? "☀️ Clair" : "🌙 Sombre"}
+            </span>
           </button>
 
           <div
             className={cn(
-              "hidden rounded-2xl border px-3 py-2 text-xs font-semibold sm:block",
+              "hidden rounded-2xl border px-3 py-2 text-xs font-semibold md:block",
               ROLE_COLORS[profile?.role] || ROLE_COLORS.user
             )}
           >
@@ -1291,7 +1424,7 @@ function TopBar({
             )}
           >
             <LogOut size={16} />
-            Déconnexion
+            <span className="hidden sm:inline">Déconnexion</span>
           </button>
         </div>
       </div>
@@ -1307,17 +1440,23 @@ function ObjectCard({
   canEdit,
   canDelete,
   darkMode,
+  locks,
+  currentUserId,
 }) {
   const imageUrl = item.photo_path
     ? supabase.storage.from("museum-photos").getPublicUrl(item.photo_path).data
         .publicUrl
     : null;
+    const activeLock = (locks || []).find((lock) => lock.object_id === item.id);
+  const isLockedByOther =
+    activeLock && activeLock.locked_by !== currentUserId;  
 
   return (
-    <article
+       <article
       className={cn(
         "overflow-hidden rounded-3xl border shadow-sm transition hover:-translate-y-0.5 hover:shadow-md",
-        darkMode ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"
+        darkMode ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white",
+        isLockedByOther && "opacity-60"
       )}
     >
       <button onClick={onOpen} className="block w-full text-left">
@@ -1338,6 +1477,7 @@ function ObjectCard({
               <ImageIcon size={40} />
             </div>
           )}
+              
         </div>
 
         <div
@@ -1347,30 +1487,36 @@ function ObjectCard({
           )}
         >
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h3
-                className={cn(
-                  "truncate text-base font-bold",
-                  darkMode ? "text-slate-100" : "text-slate-900"
-                )}
-              >
-                {item.name}
-              </h3>
-              <p
-                className={cn(
-                  "mt-1 truncate text-sm",
-                  darkMode ? "text-slate-400" : "text-slate-500"
-                )}
-              >
-                {item.reference}
-              </p>
-            </div>
-            {item.is_donation && (
-              <span className="rounded-xl bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-                Don
-              </span>
-            )}
-          </div>
+  <div className="min-w-0">
+    <h3
+      className={cn(
+        "truncate text-base font-bold",
+        darkMode ? "text-slate-100" : "text-slate-900"
+      )}
+    >
+      {item.name}
+    </h3>
+    <p
+      className={cn(
+        "mt-1 truncate text-sm",
+        darkMode ? "text-slate-400" : "text-slate-500"
+      )}
+    >
+      {item.reference}
+    </p>
+  </div>
+  {item.is_donation && (
+    <span className="rounded-xl bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+      Don
+    </span>
+  )}
+</div>
+
+{isLockedByOther && (
+  <div className="rounded-xl bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
+    Verrouillée par {activeLock?.locked_by_name || "un autre utilisateur"}
+  </div>
+)}
 
           <div
             className={cn(
@@ -1413,7 +1559,14 @@ function ObjectCard({
           )}
         </div>
       </button>
-
+{isLockedByOther && (
+  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+    Cette fiche est en cours de modification par{" "}
+    <span className="font-semibold">
+      {activeLock?.locked_by_name || "un autre utilisateur"}
+    </span>.
+  </div>
+)}
       {(canEdit || canDelete) && (
         <div
           className={cn(
@@ -1430,6 +1583,7 @@ function ObjectCard({
                   ? "border-slate-700 text-slate-100 hover:bg-slate-800"
                   : "border-slate-200 text-slate-700 hover:bg-slate-50"
               )}
+              disabled={isLockedByOther}
             >
               <Pencil size={16} />
               Modifier
@@ -1437,9 +1591,10 @@ function ObjectCard({
           )}
           {canDelete && (
             <button
-              onClick={onDelete}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100"
-            >
+  onClick={onDelete}
+  disabled={isLockedByOther}
+  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+>
               <Trash2 size={16} />
               Supprimer
             </button>
@@ -1459,6 +1614,8 @@ function DetailsPanel({
   canEdit,
   canDelete,
   darkMode,
+  locks,
+  currentUserId,
 }) {
   if (!item) {
     return (
@@ -1500,7 +1657,9 @@ function DetailsPanel({
     ? supabase.storage.from("museum-photos").getPublicUrl(item.photo_path).data
         .publicUrl
     : null;
-
+  const activeLock = (locks || []).find((lock) => lock.object_id === item.id);
+  const isLockedByOther =
+    activeLock && activeLock.locked_by !== currentUserId;
   return (
     <div
       className={cn(
@@ -1637,27 +1796,31 @@ function DetailsPanel({
           </div>
         )}
 
+      
+
         {(canEdit || canDelete) && (
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {canEdit && (
-              <button
-                onClick={onEdit}
-                className={cn(
-                  "inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition",
-                  darkMode
-                    ? "border-slate-700 text-slate-100 hover:bg-slate-800"
-                    : "border-slate-200 text-slate-700 hover:bg-slate-50"
-                )}
-              >
-                <Pencil size={16} />
-                Modifier la fiche
-              </button>
-            )}
+  <button
+    onClick={onEdit}
+    disabled={isLockedByOther}
+    className={cn(
+      "inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed",
+      darkMode
+        ? "border-slate-700 text-slate-100 hover:bg-slate-800"
+        : "border-slate-200 text-slate-700 hover:bg-slate-50"
+    )}
+  >
+    <Pencil size={16} />
+    Modifier la fiche
+  </button>
+)}
             {canDelete && (
               <button
-                onClick={onDelete}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-100"
-              >
+  onClick={onDelete}
+  disabled={isLockedByOther}
+  className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+>
                 <Trash2 size={16} />
                 Supprimer
               </button>
