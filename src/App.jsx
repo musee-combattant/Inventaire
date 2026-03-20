@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { APP_VERSION } from "./version";
+
 import {
   Camera,
   Search,
@@ -133,7 +135,77 @@ async function resizeToSquare800(file) {
     type: "image/jpeg",
   });
 }
+function ChangelogModal({ darkMode, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+      <div
+        className={cn(
+          "flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-[2rem] border shadow-2xl",
+          darkMode
+            ? "border-slate-800 bg-slate-900 text-slate-100"
+            : "border-slate-200 bg-white text-slate-900"
+        )}
+      >
+        <div
+          className={cn(
+            "flex items-center justify-between border-b px-5 py-4",
+            darkMode
+              ? "border-slate-800 bg-slate-900"
+              : "border-slate-200 bg-white"
+          )}
+        >
+          <div>
+            <h2 className="text-lg font-bold">Historique des mises à jour</h2>
+            <p
+              className={cn(
+                "text-sm",
+                darkMode ? "text-slate-400" : "text-slate-500"
+              )}
+            >
+              Évolutions de l’application
+            </p>
+          </div>
 
+          <button
+            onClick={onClose}
+            className={cn(
+              "rounded-2xl p-2 transition",
+              darkMode
+                ? "text-slate-400 hover:bg-slate-800"
+                : "text-slate-500 hover:bg-slate-100"
+            )}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-5 space-y-4">
+          {APP_VERSION.changelog.map((entry) => (
+            <div
+              key={`${entry.version}-${entry.date}`}
+              className={cn(
+                "rounded-2xl border p-4",
+                darkMode
+                  ? "border-slate-800 bg-slate-950"
+                  : "border-slate-200 bg-slate-50"
+              )}
+            >
+              <div className="text-sm font-semibold">
+                Version {entry.version} — {entry.date}
+              </div>
+
+              <ul className="mt-3 space-y-2 text-sm">
+                {entry.changes.map((change, index) => (
+                  <li key={index}>• {change}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 function App() {
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -142,6 +214,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+  const [showChangelog, setShowChangelog] = useState(false);
 
   const [search, setSearch] = useState("");
   const [roomFilter, setRoomFilter] = useState("all");
@@ -408,6 +481,12 @@ const canManageSettings = isSuperAdmin;
                 <p className={cn("mt-1 text-sm", darkMode ? "text-slate-400" : "text-slate-600")}>
                   Recherche, tri, consultation et gestion des fiches objets.
                 </p>
+                      {showChangelog && (
+        <ChangelogModal
+          darkMode={darkMode}
+          onClose={() => setShowChangelog(false)}
+        />
+      )}
               </div>
               {canAdd && (
                 <button
@@ -580,6 +659,20 @@ const canManageSettings = isSuperAdmin;
           </section>
         )}
       </main>
+      <footer className="px-4 pb-6 text-center sm:px-6 lg:px-8">
+  <button
+    type="button"
+    onClick={() => setShowChangelog(true)}
+    className={cn(
+      "text-xs underline underline-offset-2 transition",
+      darkMode
+        ? "text-slate-400 hover:text-slate-200"
+        : "text-slate-500 hover:text-slate-700"
+    )}
+  >
+    {`V${APP_VERSION.version} du ${APP_VERSION.date} by ${APP_VERSION.author}`}
+  </button>
+</footer>
 
       {formMode && (
         <ObjectFormModal
