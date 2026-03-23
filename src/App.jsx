@@ -498,7 +498,14 @@ function App() {
   async function signOut() {
     await supabase.auth.signOut();
   }
-
+  
+  function resetFilters() {
+  setSearch("");
+  setRoomFilter("all");
+  setDonationFilter("all");
+  setSortBy("created_desc");
+  setCurrentPage(1);
+}
   const isSuperAdmin = profile?.role === "super_admin";
   const isAdmin = profile?.role === "admin";
 
@@ -774,63 +781,93 @@ function App() {
           </div>
 
           <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setViewMode("grid")}
-                className={cn(
-                  "inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-medium transition",
-                  viewMode === "grid"
-                    ? darkMode
-                      ? "border-slate-500 bg-slate-700 text-slate-100"
-                      : "border-slate-900 bg-slate-900 text-white"
-                    : darkMode
-                    ? "border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
-                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                )}
-              >
-                <LayoutGrid size={16} />
-                Cartes
-              </button>
+  <div className="flex flex-wrap items-center gap-2">
+    <button
+      type="button"
+      onClick={() => setViewMode("grid")}
+      className={cn(
+        "inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-medium transition",
+        viewMode === "grid"
+          ? darkMode
+            ? "border-slate-500 bg-slate-700 text-slate-100"
+            : "border-slate-900 bg-slate-900 text-white"
+          : darkMode
+          ? "border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+      )}
+    >
+      <LayoutGrid size={16} />
+      Cartes
+    </button>
 
-              <button
-                type="button"
-                onClick={() => setViewMode("list")}
-                className={cn(
-                  "inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-medium transition",
-                  viewMode === "list"
-                    ? darkMode
-                      ? "border-slate-500 bg-slate-700 text-slate-100"
-                      : "border-slate-900 bg-slate-900 text-white"
-                    : darkMode
-                    ? "border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
-                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                )}
-              >
-                <List size={16} />
-                Liste
-              </button>
-            </div>
+    <button
+      type="button"
+      onClick={() => setViewMode("list")}
+      className={cn(
+        "inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-medium transition",
+        viewMode === "list"
+          ? darkMode
+            ? "border-slate-500 bg-slate-700 text-slate-100"
+            : "border-slate-900 bg-slate-900 text-white"
+          : darkMode
+          ? "border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+      )}
+    >
+      <List size={16} />
+      Liste
+    </button>
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="text-sm">
-                <span className={cn(darkMode ? "text-slate-400" : "text-slate-500")}>Affichage : </span>
-                <span className="font-semibold">{filteredObjects.length}</span>
-                <span className={cn("ml-1", darkMode ? "text-slate-400" : "text-slate-500")}>objet(s)</span>
-              </div>
+    <button
+      type="button"
+      onClick={resetFilters}
+      className={cn(
+        "inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-medium transition",
+        darkMode
+          ? "border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+      )}
+    >
+      <X size={16} />
+      Réinitialiser les filtres
+    </button>
+  </div>
 
-              <div className="flex items-center gap-2">
-                <span className={cn("text-sm", darkMode ? "text-slate-400" : "text-slate-500")}>Par page</span>
-                <select value={itemsPerPage} onChange={(e) => setItemsPerPage(Number(e.target.value))} className={selectClass(darkMode)}>
-                  {PAGE_SIZE_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
+  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+    <div className="text-sm whitespace-nowrap">
+      <span className={cn(darkMode ? "text-slate-400" : "text-slate-500")}>
+        Affichage :{" "}
+      </span>
+      <span className="font-semibold">{filteredObjects.length}</span>
+      <span
+        className={cn(
+          "ml-1",
+          darkMode ? "text-slate-400" : "text-slate-500"
+        )}
+      >
+        objet(s)
+      </span>
+    </div>
+
+    <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
+      <span className={cn("text-sm", darkMode ? "text-slate-400" : "text-slate-500")}>
+        Par page
+      </span>
+
+      <select
+        value={itemsPerPage}
+        onChange={(e) => setItemsPerPage(Number(e.target.value))}
+        className={selectClass(darkMode)}
+      >
+        {PAGE_SIZE_OPTIONS.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </div>
+  </div>
+</div>
         </section>
 
         {loading ? (
@@ -1267,13 +1304,13 @@ function ObjectListRow({
   locks,
   currentUserId,
 }) {
-  const activeLock = (locks || []).find((lock) => lock.object_id === item.id);
-  const isLockedByOther = activeLock && activeLock.locked_by !== currentUserId;
+  const { activeLock, isLockedByOther } = getLockState(
+    locks,
+    item.id,
+    currentUserId
+  );
 
-  const imageUrl = item.photo_path
-    ? supabase.storage.from("museum-photos").getPublicUrl(item.photo_path).data
-        .publicUrl
-    : null;
+  const imageUrl = getPublicImageUrl(item.photo_path);
 
   return (
     <div
@@ -1354,7 +1391,7 @@ function ObjectListRow({
                 onClick={onEdit}
                 disabled={isLockedByOther}
                 className={cn(
-                  "rounded-2xl border px-3 py-2 text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed",
+                  "rounded-2xl border px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50",
                   darkMode
                     ? "border-slate-700 text-slate-100 hover:bg-slate-800"
                     : "border-slate-200 text-slate-700 hover:bg-slate-50"
@@ -1368,7 +1405,7 @@ function ObjectListRow({
               <button
                 onClick={onDelete}
                 disabled={isLockedByOther}
-                className="rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Supprimer
               </button>
@@ -1720,7 +1757,7 @@ function ObjectFormModal({ mode, initialData, onClose, onSaved, currentUserId, r
           value={form.tagsInput}
           onChange={(e) => updateField("tagsInput", e.target.value)}
           className={inputClass(darkMode)}
-          placeholder="#allemand #2nde_guerre_mondiale #casque"
+          placeholder="#romain #bois #religieux"
         />
       </Field>
     </div>
