@@ -1055,7 +1055,7 @@ function AuthScreen() {
             <img src={`${base}icon.png`} alt="Icône musée" className="h-10 w-10 rounded-xl object-cover" />
             <div>
               <p className="text-lg font-bold">Inventaire musée</p>
-              <p className="text-xs text-slate-300">Musée du Combattant de la Haute-Saône</p>
+              <p className="text-xs text-slate-300">Musée du Combattant de Luxeuil-Les-Bains</p>
             </div>
           </div>
 
@@ -1136,7 +1136,7 @@ function TopBar({
           <div className="hidden min-w-0 sm:block">
             <p className="truncate text-sm font-semibold">Catalogue du musée</p>
             <p className={cn("truncate text-xs", darkMode ? "text-slate-400" : "text-slate-500")}>
-              Gestion des fiches objets du Musée du Combattant de la Haute-Saône
+              Gestion des fiches objets du Musée du Combattant de Luxeuil-Les-Bains
             </p>
           </div>
         </div>
