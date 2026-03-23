@@ -1,8 +1,16 @@
 export const APP_VERSION = {
-  version: "1.0.2",
+  version: "1.1.0",
   date: "20/03/2026",
   author: "Parkaf",
   changelog: [
+    {
+      version: "1.1.0",
+      date: "23/03/2026",
+      changes: [
+        "Ajout de la visualisation en liste",
+        "Amélioration de l'interface utilisateur",
+      ],
+    },
     {
       version: "1.0.0",
       date: "20/03/2026",
