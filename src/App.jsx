@@ -216,7 +216,13 @@ function App() {
   const [globalHistory, setGlobalHistory] = useState([]);
   const [objectLocks, setObjectLocks] = useState([]);
 
-  const [viewMode, setViewMode] = useState("grid");
+  const [viewMode, setViewMode] = useState(() => {
+  try {
+    return localStorage.getItem("museum-view-mode") || "grid";
+  } catch {
+    return "grid";
+  }
+});
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(12);
 
@@ -252,6 +258,13 @@ function App() {
     }
   }, [darkMode]);
 
+  useEffect(() => {
+  try {
+    localStorage.setItem("museum-view-mode", viewMode);
+  } catch {
+    // ignore
+  }
+}, [viewMode]);
   useEffect(() => {
     if (!session?.user) return;
 
@@ -1649,132 +1662,251 @@ function ObjectFormModal({ mode, initialData, onClose, onSaved, currentUserId, r
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[1fr_360px]">
-          <div className="space-y-5">
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Nom de l'objet *" darkMode={darkMode}>
-                <input value={form.name} onChange={(e) => updateField("name", e.target.value)} className={inputClass(darkMode)} placeholder="Ex. Vase gallo-romain" />
-              </Field>
+        <form
+  onSubmit={handleSubmit}
+  className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[1fr_360px]"
+>
+  <div className="space-y-5">
+    <div className="grid gap-4 md:grid-cols-2">
+      <Field label="Nom de l'objet *" darkMode={darkMode}>
+        <input
+          value={form.name}
+          onChange={(e) => updateField("name", e.target.value)}
+          className={inputClass(darkMode)}
+          placeholder="Ex. Casque Allemand 2nde guerre mondiale"
+        />
+      </Field>
 
-              <Field label="Référence *" darkMode={darkMode}>
-                <input value={form.reference} onChange={(e) => updateField("reference", e.target.value)} className={inputClass(darkMode)} placeholder="OBJ-2026-001" />
-              </Field>
-            </div>
+      <Field label="Référence *" darkMode={darkMode}>
+        <input
+          value={form.reference}
+          onChange={(e) => updateField("reference", e.target.value)}
+          className={inputClass(darkMode)}
+          placeholder="OBJ-2026-001"
+        />
+      </Field>
+    </div>
 
-            <Field label="Descriptif" darkMode={darkMode}>
-              <textarea
-                value={form.description}
-                onChange={(e) => updateField("description", e.target.value.slice(0, 500))}
-                rows={5}
-                className={inputClass(darkMode)}
-                placeholder="Décris l'objet en quelques lignes..."
-              />
-            </Field>
+    <Field label="Descriptif" darkMode={darkMode}>
+      <textarea
+        value={form.description}
+        onChange={(e) =>
+          updateField("description", e.target.value.slice(0, 500))
+        }
+        rows={5}
+        className={inputClass(darkMode)}
+        placeholder="Décris l'objet en quelques lignes..."
+      />
+    </Field>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Pièce du musée" darkMode={darkMode}>
-                <select value={form.room} onChange={(e) => updateField("room", e.target.value)} className={selectClass(darkMode)}>
-                  <option value="">{DEFAULT_ROOM_LABEL}</option>
-                  {rooms.map((room) => (
-                    <option key={room.id} value={room.name}>{room.name}</option>
-                  ))}
-                </select>
-              </Field>
+    <div className="grid gap-4 md:grid-cols-2">
+      <Field label="Pièce du musée" darkMode={darkMode}>
+        <select
+          value={form.room}
+          onChange={(e) => updateField("room", e.target.value)}
+          className={selectClass(darkMode)}
+        >
+          <option value="">{DEFAULT_ROOM_LABEL}</option>
+          {rooms.map((room) => (
+            <option key={room.id} value={room.name}>
+              {room.name}
+            </option>
+          ))}
+        </select>
+      </Field>
 
-              <Field label="Mots-clés / hashtags" darkMode={darkMode}>
-                <input
-                  value={form.tagsInput}
-                  onChange={(e) => updateField("tagsInput", e.target.value)}
-                  className={inputClass(darkMode)}
-                  placeholder="#romain #bois #religieux"
-                />
-              </Field>
-            </div>
+      <Field label="Mots-clés / hashtags" darkMode={darkMode}>
+        <input
+          value={form.tagsInput}
+          onChange={(e) => updateField("tagsInput", e.target.value)}
+          className={inputClass(darkMode)}
+          placeholder="#allemand #2nde_guerre_mondiale #casque"
+        />
+      </Field>
+    </div>
 
-            <div className={cn("rounded-3xl border p-4", darkMode ? "border-slate-700 bg-slate-950" : "border-slate-200 bg-white")}>
-              <label className="flex cursor-pointer items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={form.is_donation}
-                  onChange={(e) => updateField("is_donation", e.target.checked)}
-                  className="h-5 w-5 rounded border-slate-300 accent-blue-600"
-                />
-                <div>
-                  <p className={cn("text-sm font-semibold", darkMode ? "text-slate-100" : "text-slate-900")}>Cet objet provient d'un don</p>
-                  <p className={cn("text-xs", darkMode ? "text-slate-400" : "text-slate-500")}>Affiche les champs donateur, date et numéro de don</p>
-                </div>
-              </label>
+    <div
+      className={cn(
+        "rounded-3xl border p-4",
+        darkMode ? "border-slate-700 bg-slate-950" : "border-slate-200 bg-white"
+      )}
+    >
+      <label className="flex cursor-pointer items-center gap-3">
+        <input
+          type="checkbox"
+          checked={form.is_donation}
+          onChange={(e) => updateField("is_donation", e.target.checked)}
+          className="h-5 w-5 rounded border-slate-300 accent-blue-600"
+        />
+        <div>
+          <p
+            className={cn(
+              "text-sm font-semibold",
+              darkMode ? "text-slate-100" : "text-slate-900"
+            )}
+          >
+            Cet objet provient d'un don
+          </p>
+          <p
+            className={cn(
+              "text-xs",
+              darkMode ? "text-slate-400" : "text-slate-500"
+            )}
+          >
+            Affiche les champs donateur, date et numéro de don
+          </p>
+        </div>
+      </label>
 
-              {form.is_donation && (
-                <div className="mt-4 grid gap-4 md:grid-cols-3">
-                  <Field label="Numéro de don" darkMode={darkMode}>
-                    <input value={form.donation_number} onChange={(e) => updateField("donation_number", e.target.value)} className={inputClass(darkMode)} placeholder="DON-014" />
-                  </Field>
+      {form.is_donation && (
+        <div className="mt-4 grid gap-4 md:grid-cols-3">
+          <Field label="Numéro de don" darkMode={darkMode}>
+            <input
+              value={form.donation_number}
+              onChange={(e) => updateField("donation_number", e.target.value)}
+              className={inputClass(darkMode)}
+              placeholder="DON-014"
+            />
+          </Field>
 
-                  <Field label="Date du don" darkMode={darkMode}>
-                    <input type="date" value={form.donation_date} onChange={(e) => updateField("donation_date", e.target.value)} className={inputClass(darkMode)} />
-                  </Field>
+          <Field label="Date du don" darkMode={darkMode}>
+            <input
+              type="date"
+              value={form.donation_date}
+              onChange={(e) => updateField("donation_date", e.target.value)}
+              className={inputClass(darkMode)}
+            />
+          </Field>
 
-                  <Field label="Nom du donateur" darkMode={darkMode}>
-                    <input value={form.donor_name} onChange={(e) => updateField("donor_name", e.target.value)} className={inputClass(darkMode)} placeholder="Nom / organisme" />
-                  </Field>
-                </div>
-              )}
-            </div>
+          <Field label="Nom du donateur" darkMode={darkMode}>
+            <input
+              value={form.donor_name}
+              onChange={(e) => updateField("donor_name", e.target.value)}
+              className={inputClass(darkMode)}
+              placeholder="Nom / organisme"
+            />
+          </Field>
+        </div>
+      )}
+    </div>
 
-            {error && <Alert type="error" message={error} onClose={() => setError("")} />}
+    {error && (
+      <Alert
+        type="error"
+        message={error}
+        onClose={() => setError("")}
+      />
+    )}
+  </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={onClose}
-                className={cn(
-                  "rounded-2xl border px-4 py-3 text-sm font-semibold transition",
-                  darkMode ? "border-slate-700 text-slate-100 hover:bg-slate-800" : "border-slate-200 text-slate-700 hover:bg-slate-50"
-                )}
-              >
-                Annuler
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
-              >
-                {saving ? "Enregistrement..." : mode === "create" ? "Créer la fiche" : "Enregistrer les modifications"}
-              </button>
-            </div>
+  <div className="space-y-4 lg:sticky lg:top-24 lg:self-start">
+    <div
+      className={cn(
+        "overflow-hidden rounded-3xl border shadow-sm",
+        darkMode ? "border-slate-700 bg-slate-900" : "border-slate-200 bg-white"
+      )}
+    >
+      <div
+        className={cn(
+          "aspect-square",
+          darkMode ? "bg-slate-800" : "bg-slate-100"
+        )}
+      >
+        {previewUrl ? (
+          <img
+            src={previewUrl}
+            alt="Aperçu"
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-400">
+            <ImageIcon size={44} />
+            <p className="text-sm">Aucune photo</p>
           </div>
+        )}
+      </div>
 
-          <div className="space-y-4 lg:sticky lg:top-24 lg:self-start">
-            <div className={cn("overflow-hidden rounded-3xl border shadow-sm", darkMode ? "border-slate-700 bg-slate-900" : "border-slate-200 bg-white")}>
-              <div className={cn("aspect-square", darkMode ? "bg-slate-800" : "bg-slate-100")}>
-                {previewUrl ? (
-                  <img src={previewUrl} alt="Aperçu" className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-400">
-                    <ImageIcon size={44} />
-                    <p className="text-sm">Aucune photo</p>
-                  </div>
-                )}
-              </div>
-              <div className="p-4">
-                <label className={cn("flex cursor-pointer items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition", darkMode ? "border-slate-700 bg-slate-800 text-slate-100 hover:bg-slate-700" : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100")}>
-                  <Camera size={16} />
-                  Prendre / choisir une photo
-                 <input
-  type="file"
-  accept="image/*"
-  onChange={handleImageChange}
-  className="hidden"
-/>
-                </label>
-                <p className={cn("mt-3 text-xs leading-5", darkMode ? "text-slate-400" : "text-slate-500")}>
-                  L’image est automatiquement recadrée au carré et convertie en 800×800 px.
-                </p>
-              </div>
-            </div>
-          </div>
-        </form>
+      <div className="space-y-3 p-4">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <label
+            className={cn(
+              "flex cursor-pointer items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition",
+              darkMode
+                ? "border-slate-700 bg-slate-800 text-slate-100 hover:bg-slate-700"
+                : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+            )}
+          >
+            <Camera size={16} />
+            Prendre une photo
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleImageChange}
+              className="hidden"
+            />
+          </label>
+
+          <label
+            className={cn(
+              "flex cursor-pointer items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition",
+              darkMode
+                ? "border-slate-700 bg-slate-800 text-slate-100 hover:bg-slate-700"
+                : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+            )}
+          >
+            <ImageIcon size={16} />
+            Choisir une photo
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+              className="hidden"
+            />
+          </label>
+        </div>
+
+        <p
+          className={cn(
+            "text-xs leading-5",
+            darkMode ? "text-slate-400" : "text-slate-500"
+          )}
+        >
+          La photo est automatiquement recadrée au carré et convertie en 800×800 px.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div className="lg:col-span-2">
+    <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+      <button
+        type="button"
+        onClick={onClose}
+        className={cn(
+          "rounded-2xl border px-4 py-3 text-sm font-semibold transition",
+          darkMode
+            ? "border-slate-700 text-slate-100 hover:bg-slate-800"
+            : "border-slate-200 text-slate-700 hover:bg-slate-50"
+        )}
+      >
+        Annuler
+      </button>
+
+      <button
+        type="submit"
+        disabled={saving}
+        className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
+      >
+        {saving
+          ? "Enregistrement..."
+          : mode === "create"
+          ? "Créer la fiche"
+          : "Enregistrer les modifications"}
+      </button>
+    </div>
+  </div>
+</form>
       </div>
     </div>
   );
