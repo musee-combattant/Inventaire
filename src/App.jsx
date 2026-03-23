@@ -1297,6 +1297,7 @@ function ObjectListRow({ item, onOpen, onEdit, onDelete, canEdit, canDelete, dar
 }
 
 function DetailsModal({ item, history, onClose, onEdit, onDelete, canEdit, canDelete, darkMode, locks, currentUserId }) {
+  const [historyVisible, setHistoryVisible] = useState(false);
   const imageUrl = getPublicImageUrl(item.photo_path);
   const { activeLock, isLockedByOther } = getLockState(locks, item.id, currentUserId);
 
@@ -1374,35 +1375,51 @@ function DetailsModal({ item, history, onClose, onEdit, onDelete, canEdit, canDe
               )}
 
               {(canEdit || canDelete) && (
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {canEdit && (
-                    <button
-                      onClick={onEdit}
-                      disabled={isLockedByOther}
-                      className={cn(
-                        "inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50",
-                        darkMode ? "border-slate-700 text-slate-100 hover:bg-slate-800" : "border-slate-200 text-slate-700 hover:bg-slate-50"
-                      )}
-                    >
-                      <Pencil size={16} />
-                      Modifier la fiche
-                    </button>
-                  )}
+  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+    {canEdit && (
+      <button
+        onClick={onEdit}
+        disabled={isLockedByOther}
+        className={cn(
+          "inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50",
+          darkMode
+            ? "border-slate-700 text-slate-100 hover:bg-slate-800"
+            : "border-slate-200 text-slate-700 hover:bg-slate-50"
+        )}
+      >
+        <Pencil size={16} />
+        Modifier la fiche
+      </button>
+    )}
 
-                  {canDelete && (
-                    <button
-                      onClick={onDelete}
-                      disabled={isLockedByOther}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <Trash2 size={16} />
-                      Supprimer
-                    </button>
-                  )}
-                </div>
-              )}
+    {canDelete && (
+      <button
+        onClick={onDelete}
+        disabled={isLockedByOther}
+        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <Trash2 size={16} />
+        Supprimer
+      </button>
+    )}
 
-              <HistoryPanel history={history || []} darkMode={darkMode} />
+    <button
+      type="button"
+      onClick={() => setHistoryVisible((prev) => !prev)}
+      className={cn(
+        "inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition sm:col-span-3",
+        darkMode
+          ? "border-slate-700 text-slate-100 hover:bg-slate-800"
+          : "border-slate-200 text-slate-700 hover:bg-slate-50"
+      )}
+    >
+      <History size={16} />
+      {historyVisible ? "Masquer l’historique" : "Afficher l’historique"}
+    </button>
+  </div>
+)}
+
+{historyVisible && <HistoryPanel history={history || []} darkMode={darkMode} />}
             </div>
           </div>
         </div>
