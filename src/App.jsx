@@ -102,45 +102,51 @@ function normalizeTags(input) {
 }
 
 async function resizeToSquare800(file) {
-  const img = new Image();
   const objectUrl = URL.createObjectURL(file);
 
-  await new Promise((resolve, reject) => {
-    img.onload = resolve;
-    img.onerror = reject;
-    img.src = objectUrl;
-  });
+  try {
+    const img = new Image();
 
-  const size = 800;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+      img.src = objectUrl;
+    });
 
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas indisponible.");
+    const size = 800;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
 
-  const crop = Math.min(img.width, img.height);
-  const sx = (img.width - crop) / 2;
-  const sy = (img.height - crop) / 2;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas indisponible.");
 
-  ctx.drawImage(img, sx, sy, crop, crop, 0, 0, size, size);
+    const crop = Math.min(img.width, img.height);
+    const sx = (img.width - crop) / 2;
+    const sy = (img.height - crop) / 2;
 
-  const blob = await new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (result) => {
-        if (result) resolve(result);
-        else reject(new Error("Conversion image impossible."));
-      },
-      "image/jpeg",
-      0.9
-    );
-  });
+    ctx.drawImage(img, sx, sy, crop, crop, 0, 0, size, size);
 
-  URL.revokeObjectURL(objectUrl);
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (result) => {
+          if (result) resolve(result);
+          else reject(new Error("Conversion image impossible."));
+        },
+        "image/jpeg",
+        0.75
+      );
+    });
 
-  return new File([blob], `object-${Date.now()}.jpg`, {
-    type: "image/jpeg",
-  });
+    canvas.width = 1;
+    canvas.height = 1;
+
+    return new File([blob], `object-${Date.now()}.jpg`, {
+      type: "image/jpeg",
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }
 
 function getChangedFields(oldData, newData) {
@@ -1532,20 +1538,27 @@ function ObjectFormModal({ mode, initialData, onClose, onSaved, currentUserId, r
   }
 
   async function handleImageChange(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const file = e.target.files?.[0];
+  if (!file) return;
 
-    try {
-      setError("");
-      const resized = await resizeToSquare800(file);
-      setImageFile(resized);
+  try {
+    setError("");
 
-      if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(URL.createObjectURL(resized));
-    } catch (e) {
-      setError(e.message || "Impossible de traiter l'image.");
+    const resized = await resizeToSquare800(file);
+    setImageFile(resized);
+
+    if (previewUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(previewUrl);
     }
+
+    setPreviewUrl(URL.createObjectURL(resized));
+  } catch (e) {
+    console.error("Erreur image :", e);
+    setError(
+      "Impossible de traiter cette photo sur cet appareil. Essaie via la galerie."
+    );
   }
+}
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -1748,7 +1761,12 @@ function ObjectFormModal({ mode, initialData, onClose, onSaved, currentUserId, r
                 <label className={cn("flex cursor-pointer items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition", darkMode ? "border-slate-700 bg-slate-800 text-slate-100 hover:bg-slate-700" : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100")}>
                   <Camera size={16} />
                   Prendre / choisir une photo
-                  <input type="file" accept="image/*" capture="environment" onChange={handleImageChange} className="hidden" />
+                 <input
+  type="file"
+  accept="image/*"
+  onChange={handleImageChange}
+  className="hidden"
+/>
                 </label>
                 <p className={cn("mt-3 text-xs leading-5", darkMode ? "text-slate-400" : "text-slate-500")}>
                   L’image est automatiquement recadrée au carré et convertie en 800×800 px.
