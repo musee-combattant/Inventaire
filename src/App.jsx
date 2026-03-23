@@ -1080,7 +1080,7 @@ function TopBar({
           <div className="hidden min-w-0 sm:block">
             <p className="truncate text-sm font-semibold">Catalogue du musée</p>
             <p className={cn("truncate text-xs", darkMode ? "text-slate-400" : "text-slate-500")}>
-              PWA responsive de gestion des objets
+              Gestion des fiches objets du Musée du Combattant de la Haute-Saône
             </p>
           </div>
         </div>
@@ -1237,31 +1237,94 @@ function ObjectCard({ item, onOpen, onEdit, onDelete, canEdit, canDelete, darkMo
   );
 }
 
-function ObjectListRow({ item, onOpen, onEdit, onDelete, canEdit, canDelete, darkMode, locks, currentUserId }) {
-  const { activeLock, isLockedByOther } = getLockState(locks, item.id, currentUserId);
+function ObjectListRow({
+  item,
+  onOpen,
+  onEdit,
+  onDelete,
+  canEdit,
+  canDelete,
+  darkMode,
+  locks,
+  currentUserId,
+}) {
+  const activeLock = (locks || []).find((lock) => lock.object_id === item.id);
+  const isLockedByOther = activeLock && activeLock.locked_by !== currentUserId;
+
+  const imageUrl = item.photo_path
+    ? supabase.storage.from("museum-photos").getPublicUrl(item.photo_path).data
+        .publicUrl
+    : null;
 
   return (
-    <div className={cn("rounded-3xl border p-4 shadow-sm", darkMode ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white", isLockedByOther && "opacity-60")}>
+    <div
+      className={cn(
+        "rounded-3xl border p-4 shadow-sm",
+        darkMode ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white",
+        isLockedByOther && "opacity-60"
+      )}
+    >
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <button onClick={onOpen} className="min-w-0 flex-1 text-left">
-          <div className="flex flex-col gap-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-base font-bold">{item.name}</h3>
-              {item.is_donation && <span className="rounded-xl bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">Don</span>}
-              {isLockedByOther && (
-                <span className="rounded-xl bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
-                  Verrouillée par {activeLock?.locked_by_name || "un autre utilisateur"}
-                </span>
+          <div className="flex items-start gap-4">
+            <div
+              className={cn(
+                "h-16 w-16 shrink-0 overflow-hidden rounded-2xl border",
+                darkMode
+                  ? "border-slate-700 bg-slate-800"
+                  : "border-slate-200 bg-slate-100"
+              )}
+            >
+              {imageUrl ? (
+                <img
+                  src={imageUrl}
+                  alt={item.name}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-slate-400">
+                  <ImageIcon size={20} />
+                </div>
               )}
             </div>
 
-            <p className={cn("text-sm", darkMode ? "text-slate-400" : "text-slate-500")}>
-              {item.reference || "Sans référence"} • {item.room || DEFAULT_ROOM_LABEL}
-            </p>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base font-bold">{item.name}</h3>
 
-            <p className={cn("text-sm line-clamp-2", darkMode ? "text-slate-300" : "text-slate-600")}>
-              {item.description || "Aucune description."}
-            </p>
+                {item.is_donation && (
+                  <span className="rounded-xl bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                    Don
+                  </span>
+                )}
+
+                {isLockedByOther && (
+                  <span className="rounded-xl bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
+                    Verrouillée par{" "}
+                    {activeLock?.locked_by_name || "un autre utilisateur"}
+                  </span>
+                )}
+              </div>
+
+              <p
+                className={cn(
+                  "mt-1 text-sm",
+                  darkMode ? "text-slate-400" : "text-slate-500"
+                )}
+              >
+                {item.reference || "Sans référence"} •{" "}
+                {item.room || DEFAULT_ROOM_LABEL}
+              </p>
+
+              <p
+                className={cn(
+                  "mt-1 line-clamp-2 text-sm",
+                  darkMode ? "text-slate-300" : "text-slate-600"
+                )}
+              >
+                {item.description || "Aucune description."}
+              </p>
+            </div>
           </div>
         </button>
 
@@ -1272,8 +1335,10 @@ function ObjectListRow({ item, onOpen, onEdit, onDelete, canEdit, canDelete, dar
                 onClick={onEdit}
                 disabled={isLockedByOther}
                 className={cn(
-                  "rounded-2xl border px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50",
-                  darkMode ? "border-slate-700 text-slate-100 hover:bg-slate-800" : "border-slate-200 text-slate-700 hover:bg-slate-50"
+                  "rounded-2xl border px-3 py-2 text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed",
+                  darkMode
+                    ? "border-slate-700 text-slate-100 hover:bg-slate-800"
+                    : "border-slate-200 text-slate-700 hover:bg-slate-50"
                 )}
               >
                 Modifier
@@ -1284,7 +1349,7 @@ function ObjectListRow({ item, onOpen, onEdit, onDelete, canEdit, canDelete, dar
               <button
                 onClick={onDelete}
                 disabled={isLockedByOther}
-                className="rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Supprimer
               </button>
