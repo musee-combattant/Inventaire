@@ -18,7 +18,7 @@ export default defineConfig({
         "maskable_icon_512.png"
       ],
       manifest: {
-        name: "Musée du Combattant de la Haute-Saône",
+        name: "Musée du Combattant de Luxeuil-Les-Bains - Inventaire",
         short_name: "Musée",
         description: "Application d'inventaire du musée",
         start_url: "/Inventaire/",
