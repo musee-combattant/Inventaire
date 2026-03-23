@@ -272,41 +272,24 @@ function App() {
     };
   }, [settingsOpen, formMode, showChangelog, historyModalOpen, detailsModalOpen]);
 
- useEffect(() => {
-  if (!isSupabaseConfigured) {
-    setLoading(false);
-    return;
-  }
-
-  async function initAuth() {
-    try {
-      const { data, error } = await supabase.auth.getSession();
-
-      if (error) {
-        console.error("Erreur session Supabase :", error);
-        await supabase.auth.signOut();
-        setSession(null);
-        return;
-      }
-
-      setSession(data.session ?? null);
-    } catch (e) {
-      console.error("Erreur init auth :", e);
-      await supabase.auth.signOut();
-      setSession(null);
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setLoading(false);
+      return;
     }
-  }
 
-  initAuth();
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session ?? null);
+    });
 
-  const {
-    data: { subscription },
-  } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
-    setSession(nextSession ?? null);
-  });
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession ?? null);
+    });
 
-  return () => subscription.unsubscribe();
-}, []);
+    return () => subscription.unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (!session?.user) {
@@ -1318,7 +1301,7 @@ function DetailsModal({ item, history, onClose, onEdit, onDelete, canEdit, canDe
   const { activeLock, isLockedByOther } = getLockState(locks, item.id, currentUserId);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 p-4">
       <div className={cn("flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border shadow-2xl", darkMode ? "border-slate-800 bg-slate-900 text-slate-100" : "border-slate-200 bg-white text-slate-900")}>
         <div className={cn("flex items-center justify-between border-b px-5 py-4", darkMode ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white")}>
           <div>
@@ -1331,12 +1314,16 @@ function DetailsModal({ item, history, onClose, onEdit, onDelete, canEdit, canDe
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="grid gap-0 lg:grid-cols-[420px_1fr]">
-            <div className={cn("aspect-square lg:aspect-auto lg:h-full", darkMode ? "bg-slate-800" : "bg-slate-100")}>
-              {imageUrl ? (
-                <img src={imageUrl} alt={item.name} className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full min-h-[320px] items-center justify-center text-slate-400">
+          <div className="grid gap-0 lg:grid-cols-[minmax(320px,45%)_1fr]">
+  <div className={cn("flex items-center justify-center p-4 lg:min-h-[520px]", darkMode ? "bg-slate-800" : "bg-slate-100")}>
+    {imageUrl ? (
+      <img
+        src={imageUrl}
+        alt={item.name}
+        className="max-h-[70vh] w-full object-contain"
+      />
+    ) : (
+      <div className="flex h-full min-h-[320px] w-full items-center justify-center text-slate-400">
                   <ImageIcon size={44} />
                 </div>
               )}
@@ -1551,7 +1538,7 @@ function ObjectFormModal({ mode, initialData, onClose, onSaved, currentUserId, r
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-slate-900/50 p-0 sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-900/50 p-0 sm:items-center sm:p-4">
       <div className={cn("max-h-[95vh] w-full max-w-4xl overflow-auto rounded-t-[2rem] border shadow-2xl sm:rounded-[2rem]", darkMode ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white")}>
         <div className={cn("sticky top-0 z-10 flex items-center justify-between border-b px-5 py-4 backdrop-blur sm:px-6", darkMode ? "border-slate-800 bg-slate-900/95" : "border-slate-100 bg-white/95")}>
           <div>
@@ -1811,7 +1798,7 @@ function HistoryPanel({ history, darkMode }) {
 
 function GlobalHistoryModal({ history, darkMode, onClose }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 p-4">
       <div className={cn("flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border shadow-2xl", darkMode ? "border-slate-800 bg-slate-900 text-slate-100" : "border-slate-200 bg-white text-slate-900")}>
         <div className={cn("flex items-center justify-between border-b px-5 py-4", darkMode ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white")}>
           <div>
@@ -1870,7 +1857,7 @@ function GlobalHistoryModal({ history, darkMode, onClose }) {
 
 function ChangelogModal({ darkMode, onClose }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 p-4">
       <div className={cn("flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-[2rem] border shadow-2xl", darkMode ? "border-slate-800 bg-slate-900 text-slate-100" : "border-slate-200 bg-white text-slate-900")}>
         <div className={cn("flex items-center justify-between border-b px-5 py-4", darkMode ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white")}>
           <div>
