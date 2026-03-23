@@ -1375,13 +1375,13 @@ function DetailsModal({ item, history, onClose, onEdit, onDelete, canEdit, canDe
               )}
 
               {(canEdit || canDelete) && (
-  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
     {canEdit && (
       <button
         onClick={onEdit}
         disabled={isLockedByOther}
         className={cn(
-          "inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50",
+          "inline-flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold whitespace-nowrap transition disabled:cursor-not-allowed disabled:opacity-50",
           darkMode
             ? "border-slate-700 text-slate-100 hover:bg-slate-800"
             : "border-slate-200 text-slate-700 hover:bg-slate-50"
@@ -1396,7 +1396,7 @@ function DetailsModal({ item, history, onClose, onEdit, onDelete, canEdit, canDe
       <button
         onClick={onDelete}
         disabled={isLockedByOther}
-        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
       >
         <Trash2 size={16} />
         Supprimer
@@ -1407,7 +1407,7 @@ function DetailsModal({ item, history, onClose, onEdit, onDelete, canEdit, canDe
       type="button"
       onClick={() => setHistoryVisible((prev) => !prev)}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition sm:col-span-3",
+        "inline-flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition sm:col-span-2",
         darkMode
           ? "border-slate-700 text-slate-100 hover:bg-slate-800"
           : "border-slate-200 text-slate-700 hover:bg-slate-50"
